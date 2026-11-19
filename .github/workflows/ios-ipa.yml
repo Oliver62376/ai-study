@@ -1,0 +1,59 @@
+name: Build iPad IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+jobs:
+  ipa:
+    runs-on: macos-15
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install and build web app
+        run: |
+          npm ci
+          npm run build
+          npx cap sync ios
+
+      - name: Install CocoaPods
+        working-directory: ios/App
+        run: pod install
+
+      - name: Device build without a signing team
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$PWD/build/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            TARGETED_DEVICE_FAMILY=2 \
+            build
+          APP="$(find build/DerivedData/Build/Products -type d -name 'App.app' | head -n 1)"
+          test -n "$APP"
+          rm -rf Payload
+          mkdir Payload
+          cp -R "$APP" Payload/
+          zip -qry AI-Study-ipad.ipa Payload
+          unzip -t AI-Study-ipad.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AI-Study-ipad
+          path: AI-Study-ipad.ipa
+          if-no-files-found: error

@@ -1,0 +1,10 @@
+node_modules
+dist
+build
+.DS_Store
+*.ipa
+ios/App/Pods
+ios/App/App/public
+ios/DerivedData
+*.xcarchive
+.capacitor
