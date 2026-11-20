@@ -38,10 +38,14 @@ struct RootView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(selection: $section) {
+            List {
                 ForEach(AppSection.allCases) { item in
-                    Label(item.title, systemImage: item.systemImage)
-                        .tag(item)
+                    Button {
+                        section = item
+                    } label: {
+                        Label(item.title, systemImage: item.systemImage)
+                    }
+                    .listRowBackground(section == item ? Color.accentColor.opacity(0.15) : Color.clear)
                 }
             }
             .navigationTitle("AI Study")
