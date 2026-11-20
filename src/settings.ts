@@ -1,4 +1,12 @@
 import { Capacitor, CapacitorHttp } from '@capacitor/core'
+import type { VisionPage } from './ocr'
+import { listVoices } from './speech'
+import {
+  addTokenUsage,
+  extractAnthropicUsage,
+  extractGeminiUsage,
+  extractOpenAiUsage,
+} from './tokens'
 
 export type ProviderId = 'grok' | 'openai' | 'gemini' | 'claude' | 'deepseek' | 'groq' | 'mistral' | 'lan'
 
@@ -264,7 +272,28 @@ function readChat(data: Record<string, unknown>) {
   return text
 }
 
-export async function askProvider(settings: AiSettings, question: string, context: string, system?: string) {
+function promptFootprint(question: string, context: string, system: string) {
+  return `${system}\n${question}\n${context}`
+}
+
+export function listVoicesForSettings() {
+  return listVoices().map((voice) => ({
+    id: voice.voiceURI,
+    label: `${voice.name} · ${voice.lang}`,
+  }))
+}
+
+function visionPayload(pages: VisionPage[]) {
+  return pages.slice(0, 8)
+}
+
+export async function askProvider(
+  settings: AiSettings,
+  question: string,
+  context: string,
+  system?: string,
+  vision: VisionPage[] = [],
+) {
   const provider = settings.provider
   const key = keyFor(settings)
   const connected = isConnected(settings)
@@ -278,18 +307,32 @@ export async function askProvider(settings: AiSettings, question: string, contex
     `教材與目前進度：${context}`,
   ].join('\n')
 
+  const images = visionPayload(vision)
   const base = baseFor(settings)
   if (base) {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     if (key) headers.Authorization = `Bearer ${key}`
+    const userContent =
+      images.length > 0
+        ? [
+            ...images.map((page) => ({
+              type: 'image_url',
+              image_url: { url: page.dataUrl },
+            })),
+            { type: 'text', text: `${question}\n\n${context}` },
+          ]
+        : `${question}\n\n${context}`
     const data = await postJson(`${base.replace(/\/$/, '')}/chat/completions`, headers, {
       model,
       messages: [
         { role: 'system', content: instruction },
-        { role: 'user', content: question },
+        { role: 'user', content: userContent },
       ],
     })
-    return readChat(data)
+    const text = readChat(data)
+    const footprint = promptFootprint(question, context, instruction)
+    addTokenUsage(extractOpenAiUsage(data, footprint, text))
+    return text
   }
 
   if (provider === 'gemini') {
@@ -298,12 +341,27 @@ export async function askProvider(settings: AiSettings, question: string, contex
       { 'Content-Type': 'application/json' },
       {
         systemInstruction: { parts: [{ text: instruction }] },
-        contents: [{ role: 'user', parts: [{ text: question }] }],
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              ...images.map((page) => ({
+                inlineData: {
+                  mimeType: 'image/jpeg',
+                  data: page.dataUrl.includes(',') ? page.dataUrl.split(',')[1] : page.dataUrl,
+                },
+              })),
+              { text: `${question}\n\n${context}` },
+            ],
+          },
+        ],
       },
     )
     const candidates = data.candidates as { content?: { parts?: { text?: string }[] } }[] | undefined
     const text = candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('').trim()
     if (!text) throw new Error('沒有回答')
+    const footprint = promptFootprint(question, context, instruction)
+    addTokenUsage(extractGeminiUsage(data, footprint, text))
     return text
   }
 
@@ -315,10 +373,37 @@ export async function askProvider(settings: AiSettings, question: string, contex
       'anthropic-version': '2023-06-01',
       'anthropic-dangerous-direct-browser-access': 'true',
     },
-    { model, max_tokens: 700, system: instruction, messages: [{ role: 'user', content: question }] },
+    {
+      model,
+      max_tokens: 1200,
+      system: instruction,
+      messages: [
+        {
+          role: 'user',
+          content:
+            images.length > 0
+              ? [
+                  ...images.map((page) => ({
+                    type: 'image',
+                    source: {
+                      type: 'base64',
+                      media_type: 'image/jpeg',
+                      data: page.dataUrl.includes(',') ? page.dataUrl.split(',')[1] : page.dataUrl,
+                    },
+                  })),
+                  { type: 'text', text: `${question}\n\n${context}` },
+                ]
+              : `${question}\n\n${context}`,
+        },
+      ],
+    },
   )
   const content = data.content as { text?: string }[] | undefined
   const text = content?.map((part) => part.text ?? '').join('').trim()
   if (!text) throw new Error('沒有回答')
+  const footprint = promptFootprint(question, context, instruction)
+  addTokenUsage(extractAnthropicUsage(data, footprint, text))
   return text
 }
+
+export { loadTokenTotals, resetTokenTotals } from './tokens'

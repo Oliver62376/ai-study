@@ -13,10 +13,17 @@ export async function captureSheet(page: HTMLElement) {
   }
 }
 
+async function embedRaster(pdf: PDFDocument, dataUrl: string) {
+  if (/image\/jpe?g/i.test(dataUrl) || dataUrl.startsWith('data:image/jp')) {
+    return pdf.embedJpg(dataUrl)
+  }
+  return pdf.embedPng(dataUrl)
+}
+
 export async function boardPdf(images: string[]) {
   const pdf = await PDFDocument.create()
   for (const dataUrl of images) {
-    const png = await pdf.embedPng(dataUrl)
+    const png = await embedRaster(pdf, dataUrl)
     const width = 842
     const height = Math.max(420, Math.round((width * png.height) / png.width))
     const sheet = pdf.addPage([width, height])

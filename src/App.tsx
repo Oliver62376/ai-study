@@ -1,8 +1,12 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useRef, useState, type ComponentProps, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import 'katex/dist/katex.min.css'
 import { Laser, Sheet, laserFor, markerColors, type Glow, type Mark } from './board'
-import { loadState, reduce, saveState, type State } from './model'
+import { ChatView } from './chat-view'
+import { deleteLesson, lessonById, loadLessons, upsertLesson } from './lessons'
+import { NotebookScreen } from './notebook-ui'
+import type { VisionPage } from './ocr'
+import { loadState, reduce, saveState, snapshot, type State } from './model'
 import { boardPdf, captureSheet, sharePdf } from './pdf'
 import { anchorsOf, boardToolPrompt, parseCourse, parseTeacherTurn, planPrompt } from './prompt'
 import { QuizScreen } from './quiz'
@@ -23,12 +27,28 @@ import {
   IconQuiz,
   IconReplay,
   IconSend,
+  IconSettings,
   IconTrash,
 } from './icons'
 import { HomeScreen, SettingsScreen } from './shell'
 import { listen, speak } from './speech'
 
 const fast = new URLSearchParams(window.location.search).has('fast')
+
+function HudTool({
+  label,
+  children,
+  ...props
+}: { label: string; children: ReactNode } & ComponentProps<typeof IconBtn>) {
+  return (
+    <div className="hud-tool">
+      <IconBtn {...props} label={label}>
+        {children}
+      </IconBtn>
+      <span className="hud-tool-label">{label}</span>
+    </div>
+  )
+}
 
 export default function App() {
   const [state, setState] = useState<State>(() => loadState())
@@ -51,7 +71,13 @@ export default function App() {
   const [hint, setHint] = useState('')
   const [listening, setListening] = useState(false)
   const [exporting, setExporting] = useState(false)
-  const [screen, setScreen] = useState<'home' | 'class' | 'settings' | 'quiz'>('home')
+  const [screen, setScreen] = useState<'home' | 'class' | 'settings' | 'quiz' | 'chat' | 'notebook'>('home')
+  const [lessons, setLessons] = useState(() => loadLessons())
+  const [activeLessonId, setActiveLessonId] = useState('')
+  const [chatSeed, setChatSeed] = useState('')
+  const [chatContext, setChatContext] = useState('')
+  const [chatVision, setChatVision] = useState<VisionPage[]>([])
+  const visionRef = useRef<VisionPage[]>([])
   const [materialWidth, setMaterialWidth] = useState(300)
   const [fullscreen, setFullscreen] = useState(false)
   const [viewPage, setViewPage] = useState(0)
@@ -64,7 +90,12 @@ export default function App() {
   const quizBack = useRef<'home' | 'class'>('home')
   const followedPage = useRef(0)
 
-  useEffect(() => saveState(state), [state])
+  useEffect(() => {
+    saveState(state)
+    if (!state.course) return
+    upsertLesson(snapshot(state))
+    setLessons(loadLessons())
+  }, [state])
 
   useEffect(() => {
     const job = state.job
@@ -184,6 +215,7 @@ export default function App() {
       await listenStop.current?.()
       listenStop.current = null
       setListening(false)
+      setHint('')
       if (draft.trim()) void onSend(draft.trim())
       return
     }
@@ -318,7 +350,7 @@ export default function App() {
     return t
   }
 
-  async function onPlan(topic: string, fileText: string) {
+  async function onPlan(topic: string, fileText: string, vision: VisionPage[] = visionRef.current) {
     const source = buildPlanSource(topic, fileText)
     if (!source) {
       setPlanError('先輸入主題，或上傳檔案。')
@@ -333,17 +365,37 @@ export default function App() {
     }
     setPlanning(true)
     setPlanError('')
+    setScreen('class')
     try {
-      const raw = await askProvider(settings, planPrompt(source, audience), source, '你只負責備課，只回 JSON，不要講課。')
+      const raw = await askProvider(
+        settings,
+        planPrompt(source, audience),
+        source,
+        '你只負責備課，只回 JSON，不要講課。科目由來源決定。',
+        vision,
+      )
       const course = raw ? parseCourse(raw, source, audience) : null
       if (!course) throw new Error('empty')
       dispatch({ type: 'load-course', course, at: at() })
-      setScreen('class')
+      setActiveLessonId('')
     } catch {
       setPlanError('備課沒有成功。確認 API 有回應，或把教材縮短再試。')
+      setScreen('home')
     } finally {
       setPlanning(false)
     }
+  }
+
+  function onStartChat(topic: string, fileText: string, vision: VisionPage[]) {
+    const source = buildPlanSource(topic, fileText)
+    if (!source) {
+      setPlanError('先輸入主題或上傳檔案。')
+      return
+    }
+    setChatSeed(topic.trim() || source.slice(0, 200))
+    setChatContext(source)
+    setChatVision(vision)
+    setScreen('chat')
   }
 
   function enterClass() {
@@ -372,29 +424,75 @@ export default function App() {
   if (screen === 'home') {
     return (
       <HomeScreen
-        courseTitle={state.course?.title ?? ''}
-        finished={state.finished}
-        stepLabel={
-          state.course
-            ? state.finished
-              ? '這一堂已經講完'
-              : state.reveals.length
-                ? `寫到第 ${writtenPage + 1} 頁`
-                : '備好了，還沒開始講'
-            : ''
-        }
+        lessons={lessons}
+        activeLessonId={activeLessonId}
         connected={isConnected(loadSettings())}
         planning={planning}
         planError={planError}
-        onEnter={enterClass}
-        onStart={(topic, fileText) => void onPlan(topic, fileText)}
+        onEnterLesson={enterClass}
+        onOpenLesson={(id) => {
+          const lesson = lessonById(id)
+          if (!lesson) return
+          dispatch({ type: 'restore-lesson', persist: lesson.snapshot, at: at() })
+          setActiveLessonId(id)
+          setScreen('class')
+        }}
+        onDeleteLesson={(id) => {
+          deleteLesson(id)
+          setLessons(loadLessons())
+          if (id === activeLessonId) setActiveLessonId('')
+        }}
+        onStartBoard={(topic, fileText, vision) => {
+          visionRef.current = vision
+          void onPlan(topic, fileText, vision)
+        }}
+        onStartChat={onStartChat}
         onSettings={() => setScreen('settings')}
+        onNotebook={() => setScreen('notebook')}
       />
     )
   }
 
   if (screen === 'settings') {
     return <SettingsScreen onBack={() => setScreen('home')} />
+  }
+
+  if (screen === 'chat') {
+    return (
+      <div className="os-page os-page-glass chat-page">
+        <div className="os-aurora" aria-hidden />
+        <header className="os-topbar glass-bar">
+          <IconBtn label="返回首頁" onClick={() => setScreen('home')}>
+            <IconHome />
+          </IconBtn>
+          <span className="os-topbar-title">Chat</span>
+          <IconBtn label="設定" onClick={() => setScreen('settings')}>
+            <IconSettings />
+          </IconBtn>
+        </header>
+        <ChatView
+          seed={chatSeed}
+          context={chatContext}
+          vision={chatVision.length ? chatVision : visionRef.current}
+          onSettings={() => setScreen('settings')}
+        />
+      </div>
+    )
+  }
+
+  if (screen === 'notebook') {
+    return (
+      <NotebookScreen
+        onBack={() => setScreen('home')}
+        onSettings={() => setScreen('settings')}
+        onAttach={(text, image) => {
+          setChatContext(text)
+          setChatVision(image ? [{ name: '筆記', dataUrl: image }] : [])
+          setChatSeed('請根據筆記內容說明重點')
+          setScreen('chat')
+        }}
+      />
+    )
   }
 
   if (screen === 'quiz') {
@@ -421,49 +519,55 @@ export default function App() {
 
   return (
     <div className={fullscreen ? 'classroom fullscreen' : 'classroom'} style={{ ['--side' as string]: `${materialWidth}px` }}>
+      {planning && (
+        <div className="class-planning glass-panel" role="status">
+          <span className="planning-spinner" aria-hidden />
+          <p>AI 備課中…</p>
+        </div>
+      )}
       <section className="board-frame">
         <div className="board">
           <div className="hud-top">
-              <IconBtn label="離開" onClick={() => { if (speaking) dispatch({ type: 'pause' }); setScreen('home') }}>
+              <HudTool label="離開" onClick={() => { if (speaking) dispatch({ type: 'pause' }); setScreen('home') }}>
                 <IconHome />
-              </IconBtn>
-              <IconBtn
-                label={fullscreen ? '顯示教材' : '全螢幕'}
+              </HudTool>
+              <HudTool
+                label={fullscreen ? '教材' : '全螢幕'}
                 aria-pressed={fullscreen}
                 onClick={() => setFullscreen((value) => !value)}
               >
                 <IconExpand />
-              </IconBtn>
-              <IconBtn label="測驗" onClick={() => openQuiz('class')} disabled={state.phase === 'replay'}>
+              </HudTool>
+              <HudTool label="測驗" onClick={() => openQuiz('class')} disabled={state.phase === 'replay'}>
                 <IconQuiz />
-              </IconBtn>
-              <IconBtn label="匯出 PDF" onClick={() => void onExport()} disabled={exporting || state.reveals.length === 0}>
+              </HudTool>
+              <HudTool label="PDF" onClick={() => void onExport()} disabled={exporting || state.reveals.length === 0}>
                 <IconPdf />
-              </IconBtn>
-              <IconBtn
-                label={state.phase === 'replay' ? '結束回放' : '回放'}
+              </HudTool>
+              <HudTool
+                label={state.phase === 'replay' ? '停回放' : '回放'}
                 onClick={state.phase === 'replay' ? stopReplay : startReplay}
                 disabled={state.phase !== 'replay' && state.events.length === 0}
-                title={state.events.length === 0 ? '第一次發問之後才開始錄' : undefined}
+                title={state.events.length === 0 ? '開課後會開始錄製' : undefined}
               >
                 <IconReplay />
-              </IconBtn>
+              </HudTool>
               <span className="hud-progress">{progress}</span>
-              <IconBtn label="螢光筆" aria-pressed={tool === 'pen'} onClick={() => setTool((value) => (value === 'pen' ? 'off' : 'pen'))}>
+              <HudTool label="螢光筆" aria-pressed={tool === 'pen'} onClick={() => setTool((value) => (value === 'pen' ? 'off' : 'pen'))}>
                 <IconHighlighter />
-              </IconBtn>
-              <IconBtn label="橡皮擦" aria-pressed={tool === 'erase'} onClick={() => setTool((value) => (value === 'erase' ? 'off' : 'erase'))}>
+              </HudTool>
+              <HudTool label="橡皮擦" aria-pressed={tool === 'erase'} onClick={() => setTool((value) => (value === 'erase' ? 'off' : 'erase'))}>
                 <IconEraser />
-              </IconBtn>
-              <IconBtn
-                label="清除本頁"
+              </HudTool>
+              <HudTool
+                label="清本頁"
                 onClick={() => {
                   setMarks((current) => current.filter((item) => item.page !== shownPage))
                   setGlows((current) => current.filter((item) => item.page !== shownPage))
                 }}
               >
                 <IconTrash />
-              </IconBtn>
+              </HudTool>
               {tool === 'pen' && markerColors.map((color) => (
                 <button
                   key={color}
@@ -482,13 +586,16 @@ export default function App() {
               page={shownPage}
               register={() => {}}
               />
-              {state.reveals.length === 0 && <p className="empty-hint">開始上課後，板書會跟著講解寫上來。</p>}
+              {state.reveals.length === 0 && (
+                <p className="empty-hint">{planning ? 'AI 備課中…' : '按開始，板書會跟著講解寫上來。'}</p>
+              )}
               <Laser target={state.laser} root={pagesRef} />
             </div>
-            {(state.caption || hint) && (
+            {(state.caption || hint || listening) && (
               <div className="hud-caption">
+                {listening && <p className="mic-status">麥克風開啟 · 正在聽（不存原聲）</p>}
                 {state.caption && <p className="yt-caption">{state.caption}</p>}
-                {hint && <p className="hud-hint">{hint}</p>}
+                {hint && !listening && <p className="hud-hint">{hint}</p>}
               </div>
             )}
             <div className="hud-bottom">
@@ -509,7 +616,12 @@ export default function App() {
               <IconBtn label="暫停" className="icon-btn" onClick={() => dispatch({ type: 'pause' })} disabled={!speaking}>
                 <IconPause />
               </IconBtn>
-              <IconBtn label="麥克風" className="icon-btn" aria-pressed={listening} onClick={() => void onListen()}>
+              <IconBtn
+                label={listening ? '關閉麥克風' : '開啟麥克風'}
+                className={`icon-btn${listening ? ' mic-live' : ''}`}
+                aria-pressed={listening}
+                onClick={() => void onListen()}
+              >
                 <IconMic />
               </IconBtn>
               <input

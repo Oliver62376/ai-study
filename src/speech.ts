@@ -1,34 +1,87 @@
+import { loadPreferences } from './preferences'
+
 type PartialResults = { matches?: string[] }
 
+export function listVoices() {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return []
+  return window.speechSynthesis.getVoices().filter((voice) => /zh|cmn|yue|tw|hk/i.test(`${voice.lang}${voice.name}`))
+}
+
 export function speak(text: string, onend: () => void, fast: boolean) {
-  if (fast || typeof window === 'undefined' || !('speechSynthesis' in window)) {
-    const timer = window.setTimeout(onend, fast ? 40 : 700)
+  if (fast) {
+    const timer = window.setTimeout(onend, 80)
     return () => window.clearTimeout(timer)
   }
 
-  const utterance = new SpeechSynthesisUtterance(text)
-  utterance.lang = 'zh-TW'
-  utterance.rate = 0.96
   let settled = false
-  const timer = window.setTimeout(finish, Math.min(18000, 2400 + text.length * 120))
+  let cancel: () => void = () => {}
 
-  function finish() {
+  const finish = () => {
     if (settled) return
     settled = true
-    window.clearTimeout(timer)
     onend()
   }
 
-  utterance.onend = finish
-  utterance.onerror = finish
-  window.speechSynthesis.cancel()
-  window.speechSynthesis.resume()
-  window.speechSynthesis.speak(utterance)
+  void (async () => {
+    const prefs = loadPreferences()
+    const { Capacitor } = await import('@capacitor/core')
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const { TextToSpeech } = await import('@capacitor-community/text-to-speech')
+        await TextToSpeech.stop()
+        await TextToSpeech.speak({
+          text,
+          lang: 'zh-TW',
+          rate: prefs.ttsRate,
+          pitch: prefs.ttsPitch,
+        })
+        finish()
+        cancel = () => void TextToSpeech.stop()
+        return
+      } catch {
+        /* web fallback */
+      }
+    }
+
+    if (typeof globalThis.window === 'undefined' || !('speechSynthesis' in globalThis.window)) {
+      const timer = globalThis.setTimeout(finish, Math.min(12000, 900 + text.length * 130))
+      cancel = () => globalThis.clearTimeout(timer)
+      return
+    }
+
+    const utterance = new SpeechSynthesisUtterance(text)
+    utterance.lang = 'zh-TW'
+    utterance.rate = prefs.ttsRate
+    utterance.pitch = prefs.ttsPitch
+    const voices = listVoices()
+    const picked = voices.find((voice) => voice.voiceURI === prefs.ttsVoice) ?? voices[0]
+    if (picked) utterance.voice = picked
+
+    const fallback = window.setTimeout(finish, Math.min(90000, 5000 + text.length * 200))
+
+    utterance.onend = () => {
+      window.clearTimeout(fallback)
+      finish()
+    }
+    utterance.onerror = () => {
+      window.clearTimeout(fallback)
+      finish()
+    }
+
+    window.speechSynthesis.cancel()
+    window.speechSynthesis.resume()
+    window.speechSynthesis.speak(utterance)
+
+    cancel = () => {
+      settled = true
+      window.clearTimeout(fallback)
+      window.speechSynthesis.cancel()
+    }
+  })()
 
   return () => {
     settled = true
-    window.clearTimeout(timer)
-    window.speechSynthesis.cancel()
+    cancel()
   }
 }
 
@@ -65,7 +118,7 @@ export async function listen(onText: (text: string) => void): Promise<() => void
   const rec = new Ctor()
   rec.lang = 'zh-TW'
   rec.interimResults = true
-  rec.continuous = false
+  rec.continuous = true
   rec.onresult = (event) => {
     const text = Array.from(event.results)
       .map((result) => result[0]?.transcript ?? '')

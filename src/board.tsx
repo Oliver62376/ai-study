@@ -1,6 +1,15 @@
 import { useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 import katex from 'katex'
-import type { Reveal } from './model'
+import type { InkColor, Reveal } from './model'
+import { globalPalmGuard } from './pointer-stylus'
+
+const inkClass: Record<InkColor, string> = {
+  default: '',
+  chalk: 'ink-chalk',
+  blue: 'ink-blue',
+  red: 'ink-red',
+  green: 'ink-green',
+}
 
 export function laserFor(reveal: Reveal) {
   if (reveal.type === 'mark') return reveal.id.replace(/^mark-/, '')
@@ -231,6 +240,7 @@ export function Sheet({
 
   function onPointerDown(event: ReactPointerEvent<HTMLElement>) {
     if (tool === 'off') return
+    if (globalPalmGuard.shouldIgnore(event, true)) return
     const target = event.target
     if (target instanceof Element && target.closest('input, button, label, a')) return
     const next = point(event)
@@ -253,13 +263,15 @@ export function Sheet({
   }
 
   function onPointerMove(event: ReactPointerEvent<HTMLElement>) {
+    if (globalPalmGuard.shouldIgnore(event, drawing.current.length > 0)) return
     if (!drawing.current.length) return
     const next = point(event)
     drawing.current.push(`${next.x},${next.y}`)
     setDraft(drawing.current.join(' '))
   }
 
-  function onPointerUp() {
+  function onPointerUp(event: ReactPointerEvent<HTMLElement>) {
+    globalPalmGuard.shouldIgnore(event, false)
     if (drawing.current.length < 2) {
       drawing.current = []
       setDraft('')
@@ -272,7 +284,7 @@ export function Sheet({
 
   return (
     <section
-      className={tool === 'off' ? 'sheet' : 'sheet marking'}
+      className={tool === 'off' ? 'sheet' : 'sheet marking apple-pencil-surface'}
       data-page={page}
       ref={(node) => {
         setHost(node)
@@ -287,8 +299,11 @@ export function Sheet({
         <p className="page-no">第 {page + 1} 頁</p>
         {pageItems.map((item) => {
           if (item.type === 'text') {
+            const tone = item.color ? inkClass[item.color] : ''
+            const role =
+              item.variant === 'title' ? 'board-title' : item.variant === 'ink' ? 'board-ink' : 'board-text'
             return (
-              <p key={item.id} className={item.variant === 'title' ? 'board-title' : 'board-text'} data-anchor={item.id}>
+              <p key={item.id} className={`${role}${tone ? ` ${tone}` : ''}`} data-anchor={item.id}>
                 {item.text}
               </p>
             )

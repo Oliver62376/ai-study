@@ -29,6 +29,10 @@ jobs:
         working-directory: ios/App
         run: pod install
 
+      - name: Read app version
+        id: meta
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
       - name: Device build without a signing team
         run: |
           set -euo pipefail
@@ -49,11 +53,13 @@ jobs:
           rm -rf Payload
           mkdir Payload
           cp -R "$APP" Payload/
-          zip -qry AI-Study-ipad.ipa Payload
-          unzip -t AI-Study-ipad.ipa
+          VERSION="${{ steps.meta.outputs.version }}"
+          IPA_NAME="AI-Study-ipad-${VERSION}.ipa"
+          zip -qry "$IPA_NAME" Payload
+          unzip -t "$IPA_NAME"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: AI-Study-ipad
-          path: AI-Study-ipad.ipa
+          name: AI-Study-ipad-${{ steps.meta.outputs.version }}
+          path: AI-Study-ipad-*.ipa
           if-no-files-found: error

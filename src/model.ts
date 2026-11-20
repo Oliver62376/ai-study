@@ -1,7 +1,9 @@
 export type Role = 'teacher' | 'student'
 
+export type InkColor = 'default' | 'chalk' | 'blue' | 'red' | 'green'
+
 export type Reveal =
-  | { type: 'text'; id: string; page: number; text: string; variant: 'title' | 'body' }
+  | { type: 'text'; id: string; page: number; text: string; variant: 'title' | 'body' | 'ink'; color?: InkColor }
   | { type: 'formula'; id: string; page: number; latex: string; plain: string }
   | { type: 'wave'; id: string; page: number }
   | { type: 'mark'; id: string; page: number }
@@ -330,6 +332,8 @@ export type Action =
   | { type: 'toggle-done-caption' }
   | { type: 'reset' }
   | { type: 'load-course'; course: Course; at: number }
+  | { type: 'restore-lesson'; persist: Persist; at: number }
+  | { type: 'quiz-load'; questions: QuizQ[]; at: number }
   | { type: 'replay-start' }
   | { type: 'replay-event'; event: RecEvent }
   | { type: 'replay-end' }
@@ -347,7 +351,7 @@ function flushReveals(state: State, incoming: Reveal[], at: number): State {
   return next
 }
 
-function snapshot(state: State): Persist {
+export function snapshot(state: State): Persist {
   return {
     stepIndex: state.stepIndex,
     finished: state.finished,
@@ -530,9 +534,41 @@ export function reduce(state: State, action: Action): State {
       return { ...freshState(), quizLog: state.quizLog, recording: state.recording, course: state.course }
     case 'load-course':
       return beginStep(
-        { ...freshState(), course: action.course, quizLog: state.quizLog },
+        {
+          ...freshState(),
+          course: action.course,
+          quizLog: state.quizLog,
+          recording: true,
+          replayBoard: [],
+          events: [],
+        },
         action.at,
       )
+    case 'restore-lesson': {
+      const snap = action.persist
+      if (!snap.course) return state
+      return {
+        ...freshState(),
+        ...snap,
+        phase: snap.finished ? 'done' : 'ready',
+        job: null,
+        caption: snap.finished ? '這一堂已講完。' : snap.reveals.length ? '已載入板書，按繼續上課。' : '已載入課程。',
+        recording: true,
+        replaySnap: null,
+      }
+    }
+    case 'quiz-load': {
+      if (!action.questions.length) return state
+      const first = action.questions[0]
+      const say = '測驗開始。請聽題並回答。'
+      const job = nextJob(state, 'bridge', say)
+      return withJob(
+        { ...state, quizQueue: action.questions, quizIndex: 0, quizAnswers: [] },
+        job,
+        'quiz-ask',
+        { caption: first.prompt, laser: first.laser },
+      )
+    }
     case 'replay-start': {
       if (state.events.length === 0 || state.phase === 'replay') return state
       return {
