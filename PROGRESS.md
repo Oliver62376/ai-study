@@ -53,8 +53,8 @@
 7. PDF 裡的文字與公式是頁面截圖，不是可選取的文字。
 8. 螢光筆筆跡沒有跨次上課保存。重載就沒有。換色功能已依要求刪除，不要再加回去。
 9. `?fresh=1` 清的是 `ai-study-course-v1`。
-10. GitHub 登入與 IPA。已登入 Oliver62376，私人倉庫 https://github.com/Oliver62376/ai-study 。`main` 已 push。Actions run `44547374666` 成功，產物 `AI-Study-ipad`。本機已下載到 `C:\Users\boboy\Downloads\AI-Study-ipad.ipa`。這份沒有簽章，要用 Sideloadly 加使用者的 Apple ID 安裝，不能直接點開。不要改 git config。這段進度更新還在本機，不要為了它再 push `main`，否則 workflow 會再打一次。
-11. 自動測試。瀏覽器手動看過翻頁、全螢幕、綠板、螢光筆、發問後才啟用回放。沒有把新的 PDF 下載去蓋掉使用者的 `C:\Users\boboy\Downloads\黑板-波的性質.pdf`。
+10. 未簽名 IPA。GitHub Actions 可產出 `AI-Study-ipad`。這份沒有簽章，要用 Sideloadly 加使用者的 Apple ID 安裝，不能直接點開。不要改 git config。不要只為了更新這份進度文件去 push `main`，否則 workflow 會再打一次 IPA。
+11. 自動測試。瀏覽器手動看過翻頁、全螢幕、綠板、螢光筆、發問後才啟用回放。
 
 ## Bug 與已試過的處理
 
@@ -62,7 +62,7 @@
 
 - 現象：匯出檔和正在看的白板不是同一張圖。先前只把底色從 `#173728` 改成白板色，離屏那份仍是另一個寬度、動畫停在第一幀。
 - 已試過：匯出時用 `flushSync` 切到每一頁，等 80ms，對畫面上的 `.sheet` 呼叫 `captureSheet`。`.is-export` 關掉畫線動畫再截。
-- 結果：程式已改。沒有把新 PDF 下載去蓋掉 `C:\Users\boboy\Downloads\黑板-波的性質.pdf`。
+- 結果：程式已改。沒有再下載一份新的 PDF 去蓋掉使用者拿來對照的檔案。
 
 ### PDF 整頁像加了黑色濾鏡（先前那次，不夠）
 

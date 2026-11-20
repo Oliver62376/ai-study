@@ -8,3 +8,8 @@ ios/App/App/public
 ios/DerivedData
 *.xcarchive
 .capacitor
+.env
+.env.*
+*.pem
+*.p12
+*.mobileprovision
