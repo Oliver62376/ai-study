@@ -128,6 +128,120 @@ export function isConnected(settings: AiSettings) {
   return Boolean(keyFor(settings))
 }
 
+function chatLike(id: string) {
+  const lower = id.toLowerCase()
+  return !(
+    lower.includes('embed') ||
+    lower.includes('whisper') ||
+    lower.includes('tts') ||
+    lower.includes('dall-e') ||
+    lower.includes('realtime') ||
+    lower.includes('/embed') ||
+    lower.includes('moderation') ||
+    lower.includes('sora') ||
+    lower.includes('image') ||
+    lower.includes('audio')
+  )
+}
+
+async function getJson(url: string, headers: Record<string, string>) {
+  if (Capacitor.isNativePlatform()) {
+    const response = await CapacitorHttp.get({ url, headers })
+    if (response.status >= 400) throw new Error(`供應商回應 ${response.status}`)
+    return response.data as Record<string, unknown>
+  }
+  const response = await fetch(url, { headers })
+  if (!response.ok) throw new Error(`供應商回應 ${response.status}`)
+  return (await response.json()) as Record<string, unknown>
+}
+
+export async function listProviderModels(settings: AiSettings, id: ProviderId = settings.provider) {
+  const option = optionFor(id)
+  const key = keyFor(settings, id)
+  const base = baseFor(settings, id)
+  const fallback = modelFor(settings, id)
+
+  if (option.local) {
+    if (!base) return [fallback]
+    const headers: Record<string, string> = {}
+    if (key) headers.Authorization = `Bearer ${key}`
+    const data = await getJson(`${base.replace(/\/$/, '')}/models`, headers)
+    const rows = data.data as { id?: unknown }[] | undefined
+    const names = (rows ?? [])
+      .map((row) => (typeof row.id === 'string' ? row.id.trim() : ''))
+      .filter((name) => name && chatLike(name))
+    return uniqModels(names, fallback)
+  }
+
+  if (!key) return [fallback]
+
+  if (id === 'gemini') {
+    const data = await getJson(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`,
+      { 'Content-Type': 'application/json' },
+    )
+    const rows = data.models as { name?: unknown; supportedGenerationMethods?: unknown }[] | undefined
+    const names = (rows ?? [])
+      .flatMap((row) => {
+        const raw = typeof row.name === 'string' ? row.name.replace(/^models\//, '').trim() : ''
+        if (!raw) return []
+        const methods = Array.isArray(row.supportedGenerationMethods)
+          ? row.supportedGenerationMethods.filter((item): item is string => typeof item === 'string')
+          : []
+        if (methods.length && !methods.includes('generateContent')) return []
+        return [raw]
+      })
+      .filter(chatLike)
+    return uniqModels(names, fallback)
+  }
+
+  if (id === 'claude') {
+    const data = await getJson('https://api.anthropic.com/v1/models', {
+      'Content-Type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    })
+    const rows = data.data as { id?: unknown }[] | undefined
+    const names = (rows ?? [])
+      .map((row) => (typeof row.id === 'string' ? row.id.trim() : ''))
+      .filter((name) => name && chatLike(name))
+    return uniqModels(names, fallback)
+  }
+
+  const openAiBase =
+    base ||
+    (id === 'grok'
+      ? 'https://api.x.ai/v1'
+      : id === 'openai'
+        ? 'https://api.openai.com/v1'
+        : id === 'deepseek'
+          ? 'https://api.deepseek.com/v1'
+          : id === 'groq'
+            ? 'https://api.groq.com/openai/v1'
+            : id === 'mistral'
+              ? 'https://api.mistral.ai/v1'
+              : '')
+  if (!openAiBase) return [fallback]
+
+  const data = await getJson(`${openAiBase.replace(/\/$/, '')}/models`, {
+    Authorization: `Bearer ${key}`,
+    'Content-Type': 'application/json',
+  })
+  const rows = data.data as { id?: unknown }[] | undefined
+  const names = (rows ?? [])
+    .map((row) => (typeof row.id === 'string' ? row.id.trim() : ''))
+    .filter((name) => name && chatLike(name))
+  return uniqModels(names, fallback)
+}
+
+function uniqModels(names: string[], fallback: string) {
+  const list = [...new Set(names)].sort((a, b) => a.localeCompare(b, 'zh-Hant'))
+  if (!list.length) return [fallback]
+  if (fallback && !list.includes(fallback)) list.unshift(fallback)
+  return list
+}
+
 async function postJson(url: string, headers: Record<string, string>, data: unknown) {
   if (Capacitor.isNativePlatform()) {
     const response = await CapacitorHttp.post({ url, headers, data })

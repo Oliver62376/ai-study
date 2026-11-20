@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { readUploads } from './files'
 import {
   IconAttach,
@@ -7,6 +7,7 @@ import {
   IconBtn,
   IconGrade,
   IconPlay,
+  IconRefresh,
   IconSave,
   IconSend,
   IconSettings,
@@ -16,6 +17,7 @@ import {
   baseFor,
   isConnected,
   keyFor,
+  listProviderModels,
   loadSettings,
   modelFor,
   optionFor,
@@ -207,7 +209,34 @@ export function HomeScreen({
 export function SettingsScreen({ onBack }: { onBack: () => void }) {
   const [settings, setSettings] = useState<AiSettings>(() => loadSettings())
   const [saved, setSaved] = useState(false)
+  const [modelChoices, setModelChoices] = useState<string[]>(() => [modelFor(loadSettings())])
+  const [modelsLoading, setModelsLoading] = useState(false)
+  const [modelsNote, setModelsNote] = useState('')
   const current = optionFor(settings.provider)
+  const provider = settings.provider
+  const apiBase = settings.bases[provider]?.trim() ?? optionFor(provider).base ?? ''
+
+  const refreshModels = useCallback(async (draft: AiSettings) => {
+    if (!isConnected(draft)) {
+      setModelChoices([modelFor(draft)])
+      setModelsNote('先填好金鑰或局域網位址，再取得模型清單。')
+      return
+    }
+    setModelsLoading(true)
+    setModelsNote('')
+    try {
+      setModelChoices(await listProviderModels(draft))
+    } catch {
+      setModelChoices([modelFor(draft)])
+      setModelsNote('這次沒抓到模型清單，請確認金鑰與網路。')
+    } finally {
+      setModelsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void refreshModels(settings)
+  }, [provider, apiBase])
 
   function choose(id: ProviderId) {
     setSaved(false)
@@ -255,6 +284,14 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
                   bases: { ...value.bases, [value.provider]: event.target.value },
                 }))
               }
+              onBlur={() => {
+                window.setTimeout(() => {
+                  setSettings((value) => {
+                    void refreshModels(value)
+                    return value
+                  })
+                }, 0)
+              }}
             />
           </label>
         )}
@@ -270,20 +307,47 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
                 keys: { ...value.keys, [value.provider]: event.target.value },
               }))
             }
+            onBlur={() => {
+              window.setTimeout(() => {
+                setSettings((value) => {
+                  void refreshModels(value)
+                  return value
+                })
+              }, 0)
+            }}
           />
         </label>
         <label className="field">
           模型
-          <input
-            value={modelFor(settings)}
-            onChange={(event) =>
-              patch((value) => ({
-                ...value,
-                models: { ...value.models, [value.provider]: event.target.value },
-              }))
-            }
-          />
+          <div className="model-row">
+            <select
+              className="model-select"
+              value={modelFor(settings)}
+              disabled={modelsLoading || modelChoices.length === 0}
+              onChange={(event) =>
+                patch((value) => ({
+                  ...value,
+                  models: { ...value.models, [value.provider]: event.target.value },
+                }))
+              }
+            >
+              {modelChoices.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+            <IconBtn
+              label="重新取得模型"
+              disabled={modelsLoading || !isConnected(settings)}
+              onClick={() => void refreshModels(settings)}
+            >
+              <IconRefresh />
+            </IconBtn>
+          </div>
         </label>
+        {modelsLoading && <p className="os-muted">正在取得模型…</p>}
+        {modelsNote && <p className="os-muted">{modelsNote}</p>}
         <IconBtn
           label="儲存"
           className="save-wide"

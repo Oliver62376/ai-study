@@ -178,6 +178,14 @@ export function IconChevronRight() {
   )
 }
 
+export function IconRefresh() {
+  return (
+    <Svg>
+      <path d="M8 8H5v3M5 12a7 7 0 1 0 1.6-4.4" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  )
+}
+
 export function IconSave() {
   return (
     <Svg>
