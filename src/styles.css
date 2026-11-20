@@ -654,6 +654,223 @@ button[aria-pressed="true"] {
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang TC', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
 }
 
+.icon-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border-radius: 14px;
+  border: 0.5px solid rgba(120, 120, 128, 0.25);
+  background: rgba(255, 255, 255, 0.45);
+  color: #1c1c1e;
+  backdrop-filter: blur(16px) saturate(160%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+
+.icon-tool.ghost { border-color: transparent; background: transparent; box-shadow: none; }
+.icon-tool.send { background: #111827; color: #fff; border-color: transparent; border-radius: 999px; min-width: 40px; min-height: 40px; }
+.icon-tool.send:disabled { opacity: 0.35; }
+.icon-tool.online { box-shadow: 0 0 0 2px rgba(52, 199, 89, 0.45); }
+.icon-tool.active,
+.icon-tool[aria-pressed="true"] { background: rgba(0, 122, 255, 0.18); color: #007aff; border-color: rgba(0, 122, 255, 0.25); }
+.icon-tool.save-wide { width: 100%; background: #007aff; color: #fff; border-color: transparent; }
+
+.hud-top .icon-tool,
+.hud-bottom .icon-tool,
+.pager .icon-tool {
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid #1c1915;
+  color: #1c1915;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.hud-bottom .icon-tool.send { background: #1c1915; color: #fff; border-color: #1c1915; }
+
+.os-home-gpt,
+.os-page-glass {
+  position: relative;
+  overflow: hidden;
+}
+
+.os-aurora {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(900px 420px at 15% -5%, rgba(147, 197, 253, 0.42), transparent 55%),
+    radial-gradient(700px 380px at 88% 8%, rgba(244, 114, 182, 0.26), transparent 52%),
+    radial-gradient(620px 360px at 50% 100%, rgba(167, 243, 208, 0.32), transparent 55%),
+    #f5f5f9;
+}
+
+.glass-bar,
+.glass-composer,
+.glass-rail,
+.glass-panel,
+.glass-pop,
+.glass-hint,
+.glass-card {
+  border: 0.5px solid rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.58);
+  backdrop-filter: blur(28px) saturate(185%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    0 10px 36px rgba(15, 23, 42, 0.08);
+}
+
+.os-brand-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: linear-gradient(140deg, #2563eb, #9333ea 58%, #ec4899);
+  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.25);
+}
+
+.os-chat-stage {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(196px, 252px) minmax(0, 1fr);
+  gap: 16px;
+  max-width: 1180px;
+  min-height: calc(100dvh - 58px);
+  margin: 0 auto;
+  padding: 10px max(16px, env(safe-area-inset-right)) 22px max(16px, env(safe-area-inset-left));
+}
+
+.os-lessons-rail {
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 12px;
+  border-radius: 22px;
+  color: #4b5563;
+}
+
+.os-empty-rail {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #9ca3af;
+}
+
+.os-lesson-chip {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 12px;
+  text-align: left;
+  border-radius: 16px;
+  color: #111827;
+}
+
+.os-lesson-chip-title { font-size: 15px; font-weight: 600; line-height: 1.35; }
+.os-lesson-chip-meta { font-size: 12px; color: #6b7280; }
+.os-lesson-play { justify-self: end; color: #007aff; }
+
+.os-chat-main {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: calc(100dvh - 120px);
+  padding: 8px;
+}
+
+.os-hero {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: clamp(24px, 10vh, 96px) 12px 20px;
+}
+
+.os-hero-title {
+  margin: 0;
+  font-size: clamp(34px, 5.2vw, 52px);
+  font-weight: 650;
+  letter-spacing: -0.045em;
+}
+
+.os-hero-sub {
+  margin: 12px 0 0;
+  max-width: 420px;
+  font-size: 17px;
+  line-height: 1.5;
+  color: #6b7280;
+}
+
+.os-composer {
+  width: min(760px, 100%);
+  margin: 0 auto;
+  border-radius: 26px;
+  padding: 12px 14px 10px;
+}
+
+.os-composer-input {
+  width: 100%;
+  min-height: 54px;
+  max-height: 168px;
+  margin: 0 0 6px;
+  resize: none;
+  border: 0;
+  background: transparent;
+  color: #111827;
+  font: inherit;
+  font-size: 17px;
+  line-height: 1.5;
+}
+
+.os-composer-input::placeholder { color: #9ca3af; }
+.os-composer-input:focus { outline: none; }
+
+.os-composer-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.os-composer-spacer { flex: 1; }
+
+.os-attach-hit {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.os-attach-hit input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.glass-hint {
+  width: fit-content;
+  margin: 10px auto 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+}
+
+.os-page-glass .os-page-body.glass-panel {
+  position: relative;
+  z-index: 1;
+  margin-top: 12px;
+  border-radius: 24px;
+  padding: 24px 22px 32px;
+}
+
 .os-topbar {
   display: flex;
   align-items: center;
@@ -906,6 +1123,10 @@ button[aria-pressed="true"] {
     padding-top: 28px;
     justify-content: flex-start;
   }
+  .os-chat-stage { grid-template-columns: 1fr; }
+  .os-lessons-rail { order: 2; }
+  .os-chat-main { min-height: auto; order: 1; }
+  .os-hero { padding-top: 48px; padding-bottom: 12px; }
 }
 
 .ipad-app {

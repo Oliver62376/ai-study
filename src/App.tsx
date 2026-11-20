@@ -8,6 +8,23 @@ import { anchorsOf, boardToolPrompt, parseCourse, parseTeacherTurn, planPrompt }
 import { QuizScreen } from './quiz'
 import { askProvider, isConnected, loadSettings } from './settings'
 import { gradeLabel } from './profile'
+import {
+  IconBtn,
+  IconChevronLeft,
+  IconChevronRight,
+  IconEraser,
+  IconExpand,
+  IconHighlighter,
+  IconHome,
+  IconMic,
+  IconPause,
+  IconPdf,
+  IconPlay,
+  IconQuiz,
+  IconReplay,
+  IconSend,
+  IconTrash,
+} from './icons'
 import { HomeScreen, SettingsScreen } from './shell'
 import { listen, speak } from './speech'
 
@@ -407,32 +424,46 @@ export default function App() {
       <section className="board-frame">
         <div className="board">
           <div className="hud-top">
-              <button type="button" onClick={() => { if (speaking) dispatch({ type: 'pause' }); setScreen('home') }}>離開</button>
-              <button type="button" aria-pressed={fullscreen} onClick={() => setFullscreen((value) => !value)}>
-                {fullscreen ? '顯示教材' : '全螢幕'}
-              </button>
-              <button type="button" onClick={() => openQuiz('class')} disabled={state.phase === 'replay'}>測驗</button>
-              <button type="button" onClick={() => void onExport()} disabled={exporting || state.reveals.length === 0}>PDF</button>
-              <button
-                type="button"
+              <IconBtn label="離開" onClick={() => { if (speaking) dispatch({ type: 'pause' }); setScreen('home') }}>
+                <IconHome />
+              </IconBtn>
+              <IconBtn
+                label={fullscreen ? '顯示教材' : '全螢幕'}
+                aria-pressed={fullscreen}
+                onClick={() => setFullscreen((value) => !value)}
+              >
+                <IconExpand />
+              </IconBtn>
+              <IconBtn label="測驗" onClick={() => openQuiz('class')} disabled={state.phase === 'replay'}>
+                <IconQuiz />
+              </IconBtn>
+              <IconBtn label="匯出 PDF" onClick={() => void onExport()} disabled={exporting || state.reveals.length === 0}>
+                <IconPdf />
+              </IconBtn>
+              <IconBtn
+                label={state.phase === 'replay' ? '結束回放' : '回放'}
                 onClick={state.phase === 'replay' ? stopReplay : startReplay}
                 disabled={state.phase !== 'replay' && state.events.length === 0}
-                title={state.events.length === 0 ? '第一次發問之後才開始錄，避免把整堂課重送模型' : '回放發問之後的內容'}
+                title={state.events.length === 0 ? '第一次發問之後才開始錄' : undefined}
               >
-                {state.phase === 'replay' ? '結束回放' : '回放'}
-              </button>
+                <IconReplay />
+              </IconBtn>
               <span className="hud-progress">{progress}</span>
-              <button type="button" aria-pressed={tool === 'pen'} onClick={() => setTool((value) => (value === 'pen' ? 'off' : 'pen'))}>螢光筆</button>
-              <button type="button" aria-pressed={tool === 'erase'} onClick={() => setTool((value) => (value === 'erase' ? 'off' : 'erase'))}>橡皮擦</button>
-              <button
-                type="button"
+              <IconBtn label="螢光筆" aria-pressed={tool === 'pen'} onClick={() => setTool((value) => (value === 'pen' ? 'off' : 'pen'))}>
+                <IconHighlighter />
+              </IconBtn>
+              <IconBtn label="橡皮擦" aria-pressed={tool === 'erase'} onClick={() => setTool((value) => (value === 'erase' ? 'off' : 'erase'))}>
+                <IconEraser />
+              </IconBtn>
+              <IconBtn
+                label="清除本頁"
                 onClick={() => {
                   setMarks((current) => current.filter((item) => item.page !== shownPage))
                   setGlows((current) => current.filter((item) => item.page !== shownPage))
                 }}
               >
-                清除本頁
-              </button>
+                <IconTrash />
+              </IconBtn>
               {tool === 'pen' && markerColors.map((color) => (
                 <button
                   key={color}
@@ -462,16 +493,25 @@ export default function App() {
             )}
             <div className="hud-bottom">
               {state.phase === 'replay' ? (
-                <button type="button" className="icon-btn" onClick={stopReplay} aria-label="結束回放">結束</button>
+                <IconBtn label="結束回放" className="icon-btn" onClick={stopReplay}>
+                  <IconPause />
+                </IconBtn>
               ) : (
-                <button type="button" className="icon-btn" onClick={play} disabled={speaking || (state.finished && state.phase !== 'paused')} aria-label={state.phase === 'paused' ? '繼續' : '開始'}>
-                  {state.phase === 'paused' ? '繼續' : '開始'}
-                </button>
+                <IconBtn
+                  label={state.phase === 'paused' ? '繼續' : '開始'}
+                  className="icon-btn"
+                  onClick={play}
+                  disabled={speaking || (state.finished && state.phase !== 'paused')}
+                >
+                  <IconPlay />
+                </IconBtn>
               )}
-              <button type="button" className="icon-btn" aria-label="暫停" onClick={() => dispatch({ type: 'pause' })} disabled={!speaking}>II</button>
-              <button type="button" className="icon-btn" aria-pressed={listening} aria-label="麥克風" onClick={() => void onListen()}>
-                {listening ? '停' : '麥'}
-              </button>
+              <IconBtn label="暫停" className="icon-btn" onClick={() => dispatch({ type: 'pause' })} disabled={!speaking}>
+                <IconPause />
+              </IconBtn>
+              <IconBtn label="麥克風" className="icon-btn" aria-pressed={listening} onClick={() => void onListen()}>
+                <IconMic />
+              </IconBtn>
               <input
                 className="ask"
                 value={draft}
@@ -484,11 +524,17 @@ export default function App() {
                   if (event.key === 'Enter') void onSend()
                 }}
               />
-              <button type="button" className="icon-btn" onClick={() => void onSend()}>送出</button>
+              <IconBtn label="送出" className="icon-btn send" onClick={() => void onSend()}>
+                <IconSend />
+              </IconBtn>
               <div className="pager" aria-label="翻頁">
-                <button type="button" onClick={() => setViewPage((page) => Math.max(0, page - 1))} disabled={shownPage === 0}>上一頁</button>
+                <IconBtn label="上一頁" onClick={() => setViewPage((page) => Math.max(0, page - 1))} disabled={shownPage === 0}>
+                  <IconChevronLeft />
+                </IconBtn>
                 <span>{shownPage + 1} / {pageCount}</span>
-                <button type="button" onClick={() => setViewPage((page) => Math.min(pageCount - 1, page + 1))} disabled={shownPage >= pageCount - 1}>下一頁</button>
+                <IconBtn label="下一頁" onClick={() => setViewPage((page) => Math.min(pageCount - 1, page + 1))} disabled={shownPage >= pageCount - 1}>
+                  <IconChevronRight />
+                </IconBtn>
               </div>
             </div>
         </div>

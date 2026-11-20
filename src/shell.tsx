@@ -1,5 +1,16 @@
 import { useState, type ReactNode } from 'react'
 import { readUploads } from './files'
+import {
+  IconAttach,
+  IconBack,
+  IconBook,
+  IconBtn,
+  IconGrade,
+  IconPlay,
+  IconSave,
+  IconSend,
+  IconSettings,
+} from './icons'
 import { gradeLabel, gradeOptions, loadGrade, saveGrade, type GradeId } from './profile'
 import {
   baseFor,
@@ -16,14 +27,14 @@ import {
 
 function AppTopBar({ children, onBack }: { children?: ReactNode; onBack?: () => void }) {
   return (
-    <header className="os-topbar">
+    <header className="os-topbar glass-bar">
       <div className="os-topbar-start">
         {onBack ? (
-          <button type="button" className="os-back" onClick={onBack}>
-            返回
-          </button>
+          <IconBtn label="返回" onClick={onBack}>
+            <IconBack />
+          </IconBtn>
         ) : (
-          <span className="os-brand">AI 智慧教學</span>
+          <span className="os-brand-mark" aria-hidden />
         )}
       </div>
       <div className="os-topbar-end">{children}</div>
@@ -35,11 +46,11 @@ function GradeMenu({ grade, onChange }: { grade: GradeId; onChange: (id: GradeId
   const [open, setOpen] = useState(false)
   return (
     <div className="os-menu-wrap">
-      <button type="button" className="os-pill" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
-        {gradeLabel(grade)}
-      </button>
+      <IconBtn label={`年級：${gradeLabel(grade)}`} className={open ? 'active' : ''} onClick={() => setOpen((value) => !value)} aria-expanded={open}>
+        <IconGrade />
+      </IconBtn>
       {open && (
-        <ul className="os-menu" role="listbox">
+        <ul className="os-menu glass-pop" role="listbox">
           {gradeOptions.map((item) => (
             <li key={item.id}>
               <button
@@ -88,94 +99,106 @@ export function HomeScreen({
   const [reading, setReading] = useState(false)
   const [fileNote, setFileNote] = useState('')
   const [grade, setGrade] = useState<GradeId>(() => loadGrade())
-  const providerName = optionFor(loadSettings().provider).name
   const canStart = topic.trim().length > 0 || fileText.trim().length > 0
 
   return (
-    <div className="os-home">
+    <div className="os-home os-home-gpt">
+      <div className="os-aurora" aria-hidden />
       <AppTopBar>
         <GradeMenu grade={grade} onChange={setGrade} />
-        <button type="button" className="os-pill" onClick={onSettings}>
-          模型{connected ? ` · ${providerName}` : ''}
-        </button>
+        <IconBtn label={connected ? '模型已連線' : '模型設定'} className={connected ? 'online' : ''} onClick={onSettings}>
+          <IconSettings />
+        </IconBtn>
       </AppTopBar>
 
-      <div className="os-home-body">
-        <aside className="os-lessons" aria-label="已上過的課">
-          <h2>我的課</h2>
+      <div className="os-chat-stage">
+        <aside className="os-lessons-rail glass-rail" aria-label="已上過的課">
+          <IconBook />
           {courseTitle ? (
-            <button type="button" className="os-lesson current" onClick={onEnter}>
-              <span className="os-lesson-title">{courseTitle}</span>
-              <span className="os-lesson-meta">{stepLabel}</span>
-              <span className="os-lesson-cta">{finished ? '打開白板' : '繼續上課'}</span>
+            <button type="button" className="os-lesson-chip glass-card" onClick={onEnter} title={courseTitle} aria-label={`${courseTitle}，${finished ? '打開白板' : '繼續上課'}`}>
+              <span className="os-lesson-chip-title">{courseTitle}</span>
+              <span className="os-lesson-chip-meta">{stepLabel}</span>
+              <span className="os-lesson-play" aria-hidden>
+                <IconPlay />
+              </span>
             </button>
           ) : (
-            <p className="os-empty">上過的課會留在這裡，點一下就能回到白板。</p>
+            <p className="os-empty-rail">課程會出現在這裡</p>
           )}
         </aside>
 
-        <section className="os-start">
-          <p className="os-kicker">想學什麼，直接告訴老師</p>
-          <label className="os-topic-field">
-            <span className="visually-hidden">想學的主題</span>
-            <input
-              className="os-topic-input"
+        <main className="os-chat-main">
+          <div className="os-hero">
+            <h1 className="os-hero-title">今天想學什麼？</h1>
+            <p className="os-hero-sub">像跟老師說話一樣，輸入主題就能開始。</p>
+          </div>
+
+          <div className="os-composer glass-composer">
+            <textarea
+              className="os-composer-input"
               value={topic}
+              rows={1}
               placeholder="教我二元一次方程式"
               disabled={planning}
               onChange={(event) => setTopic(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === 'Enter' && canStart && !planning && connected) onStart(topic.trim(), fileText.trim())
+                if (event.key === 'Enter' && !event.shiftKey && canStart && !planning) {
+                  event.preventDefault()
+                  if (!connected) onSettings()
+                  else onStart(topic.trim(), fileText.trim())
+                }
               }}
             />
-          </label>
-
-          <div className="os-start-actions">
-            <button
-              type="button"
-              className="os-primary"
-              disabled={planning || !canStart}
-              onClick={() => {
-                if (!connected) {
-                  onSettings()
-                  return
-                }
-                onStart(topic.trim(), fileText.trim())
-              }}
-            >
-              {planning ? '備課中…' : connected ? '開始上課' : '先接上模型'}
-            </button>
-
-            <label className="os-file">
-              {reading ? '正在讀檔案…' : '改用我的檔案'}
-              <input
-                type="file"
-                accept=".pdf,.docx,.pptx,.txt,.md,application/pdf,text/plain"
-                multiple
-                disabled={reading || planning}
-                onChange={(event) => {
-                  const list = [...(event.target.files ?? [])]
-                  event.target.value = ''
-                  if (!list.length) return
-                  setReading(true)
-                  setFileNote('')
-                  void readUploads(list)
-                    .then((text) => {
-                      setFileText((current) => (current.trim() ? `${current.trim()}\n\n${text}` : text))
-                      setFileNote(list.map((file) => file.name).join('、'))
-                    })
-                    .catch((error: unknown) => {
-                      setFileNote(error instanceof Error ? error.message : '這個檔案沒讀成')
-                    })
-                    .finally(() => setReading(false))
+            <div className="os-composer-bar">
+              <label className="os-attach-hit">
+                <span className="icon-tool ghost" title={reading ? '正在讀檔案' : '上傳檔案'} aria-hidden>
+                  <IconAttach />
+                </span>
+                <span className="visually-hidden">{reading ? '正在讀檔案' : '上傳檔案'}</span>
+                <input
+                  type="file"
+                  accept=".pdf,.docx,.pptx,.txt,.md,application/pdf,text/plain"
+                  multiple
+                  disabled={reading || planning}
+                  onChange={(event) => {
+                    const list = [...(event.target.files ?? [])]
+                    event.target.value = ''
+                    if (!list.length) return
+                    setReading(true)
+                    setFileNote('')
+                    void readUploads(list)
+                      .then((text) => {
+                        setFileText((current) => (current.trim() ? `${current.trim()}\n\n${text}` : text))
+                        setFileNote(list.map((file) => file.name).join('、'))
+                      })
+                      .catch((error: unknown) => {
+                        setFileNote(error instanceof Error ? error.message : '這個檔案沒讀成')
+                      })
+                      .finally(() => setReading(false))
+                  }}
+                />
+              </label>
+              <span className="os-composer-spacer" />
+              <IconBtn
+                label={planning ? '備課中' : connected ? '開始上課' : '先接上模型'}
+                className="send"
+                disabled={planning || !canStart}
+                onClick={() => {
+                  if (!connected) {
+                    onSettings()
+                    return
+                  }
+                  onStart(topic.trim(), fileText.trim())
                 }}
-              />
-            </label>
+              >
+                <IconSend />
+              </IconBtn>
+            </div>
           </div>
 
-          {fileNote && <p className="os-note">已讀入 {fileNote}</p>}
+          {fileNote && <p className="os-note glass-hint">已讀入 {fileNote}</p>}
           {planError && <p className="os-error">{planError}</p>}
-        </section>
+        </main>
       </div>
     </div>
   )
@@ -197,11 +220,12 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   }
 
   return (
-    <div className="os-page">
+    <div className="os-page os-page-glass">
+      <div className="os-aurora" aria-hidden />
       <AppTopBar onBack={onBack} />
-      <div className="os-page-body">
+      <div className="os-page-body glass-panel">
         <h1 className="os-page-title">模型</h1>
-        <p className="os-muted">目前年級：{gradeLabel()}。在首頁右上角可改。金鑰只留在這台裝置。Grok 會一直留在名單裡。</p>
+        <p className="os-muted">年級 {gradeLabel()} · 金鑰只留在本機 · Grok 必留</p>
         <div className="provider-list os-providers">
           {providerOptions.map((option) => (
             <label key={option.id} className={option.id === settings.provider ? 'provider selected' : 'provider'}>
@@ -260,20 +284,20 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
             }
           />
         </label>
-        <button
-          type="button"
-          className="os-primary"
+        <IconBtn
+          label="儲存"
+          className="save-wide"
           onClick={() => {
             saveSettings(settings)
             setSaved(true)
           }}
         >
-          儲存
-        </button>
+          <IconSave />
+        </IconBtn>
         {saved && (
           <p className="os-muted">
-            已儲存。現在用 {current.name}
-            {isConnected(settings) ? '，已可呼叫。' : '，還沒接上。'}
+            已儲存 · {current.name}
+            {isConnected(settings) ? ' · 已連線' : ' · 尚未連線'}
           </p>
         )}
       </div>
@@ -283,9 +307,10 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
 
 export function ShellPage({ onBack, title, children }: { onBack: () => void; title: string; children: ReactNode }) {
   return (
-    <div className="os-page">
+    <div className="os-page os-page-glass">
+      <div className="os-aurora" aria-hidden />
       <AppTopBar onBack={onBack} />
-      <div className="os-page-body">
+      <div className="os-page-body glass-panel">
         <h1 className="os-page-title">{title}</h1>
         {children}
       </div>
