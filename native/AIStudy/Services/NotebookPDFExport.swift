@@ -7,12 +7,12 @@ enum NotebookPDFExport {
         let sorted = notebook.pages.sorted { $0.sortIndex < $1.sortIndex }
         guard let first = sorted.first else { return nil }
 
-        let pageRect = pageRect(for: first)
+        let pageRect = pageBounds(for: first)
         let renderer = UIGraphicsPDFRenderer(bounds: pageRect)
 
         return renderer.pdfData { context in
             for page in sorted {
-                let rect = pageRect(for: page)
+                let rect = pageBounds(for: page)
                 context.beginPage(withBounds: rect, pageInfo: [:])
                 guard let cg = UIGraphicsGetCurrentContext() else { continue }
 
@@ -32,7 +32,7 @@ enum NotebookPDFExport {
         }
     }
 
-    private static func pageRect(for page: NotePage) -> CGRect {
+    private static func pageBounds(for page: NotePage) -> CGRect {
         if let data = page.backgroundImageData, let image = UIImage(data: data) {
             return CGRect(origin: .zero, size: image.size)
         }
