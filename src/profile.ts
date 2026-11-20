@@ -12,6 +12,11 @@ export const gradeOptions = [
   { id: 'h1', label: '高一' },
   { id: 'h2', label: '高二' },
   { id: 'h3', label: '高三' },
+  { id: 'u1', label: '大一' },
+  { id: 'u2', label: '大二' },
+  { id: 'u3', label: '大三' },
+  { id: 'u4', label: '大四' },
+  { id: 'u5', label: '大學以上／研究所' },
 ] as const
 
 export type GradeId = (typeof gradeOptions)[number]['id']

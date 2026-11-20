@@ -21,6 +21,7 @@ import {
   type AppPreferences,
   type HomeMode,
   type UploadMode,
+  type NotebookPageNav,
 } from './preferences'
 import {
   defaultCustomPrompts,
@@ -42,6 +43,7 @@ import {
   type StylusPreferences,
 } from './stylus-prefs'
 
+import { NotebookHomeSection } from './notebook-hub'
 import { APP_VERSION } from './custom-prompts'
 import { gradeLabel, gradeOptions, loadGrade, saveGrade, type GradeId } from './profile'
 import {
@@ -105,6 +107,8 @@ export function HomeScreen({
   onStartChat,
   onSettings,
   onNotebook,
+  onOpenNotebook,
+  onManageNotebooks,
 }: {
   lessons: LessonRecord[]
   activeLessonId: string
@@ -118,6 +122,8 @@ export function HomeScreen({
   onStartChat: (topic: string, fileText: string, vision: VisionPage[]) => void
   onSettings: () => void
   onNotebook: () => void
+  onOpenNotebook: (bookId: string) => void
+  onManageNotebooks: () => void
 }) {
   const [topic, setTopic] = useState('')
   const [fileText, setFileText] = useState('')
@@ -288,6 +294,7 @@ export function HomeScreen({
           </div>
 
           {planError && <p className="os-error">{planError}</p>}
+          <NotebookHomeSection onOpen={onOpenNotebook} onManage={onManageNotebooks} />
         </main>
       </div>
     </div>
@@ -328,6 +335,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   const [tokenTotals, setTokenTotals] = useState(() => loadTokenTotals())
   const [stylus, setStylus] = useState<StylusPreferences>(() => loadStylusPreferences())
   const [customPrompts, setCustomPrompts] = useState<CustomPrompts>(() => loadCustomPrompts())
+  const [settingsTab, setSettingsTab] = useState<'general' | 'model' | 'voice' | 'notebook' | 'pencil' | 'prompts'>('general')
   const current = optionFor(settings.provider)
   const provider = settings.provider
   const apiBase = settings.bases[provider]?.trim() ?? optionFor(provider).base ?? ''
@@ -435,6 +443,31 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
       <div className="os-aurora" aria-hidden />
       <AppTopBar onBack={onBack} title="設定" />
       <div className="os-page-body glass-panel settings-stack">
+        <div className="settings-tabs" role="tablist" aria-label="設定分類">
+          {(
+            [
+              ['general', '一般'],
+              ['model', '模型'],
+              ['voice', '語音'],
+              ['notebook', '筆記'],
+              ['pencil', 'Pencil'],
+              ['prompts', '提示詞'],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={settingsTab === id}
+              className={settingsTab === id ? 'on' : ''}
+              onClick={() => setSettingsTab(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {settingsTab === 'general' && (
         <section>
           <h2>年級／程度</h2>
           <select className="model-select" value={grade} onChange={(event) => setGrade(event.target.value as GradeId)}>
@@ -445,7 +478,9 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
             ))}
           </select>
         </section>
+        )}
 
+        {settingsTab === 'prompts' && (
         <section>
           <h2>提示詞（可匯入 txt）</h2>
           <p className="os-muted">
@@ -482,7 +517,9 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
             下載範本 txt（瀏覽器）
           </button>
         </section>
+        )}
 
+        {settingsTab === 'general' && (
         <section>
           <h2>檔案上傳</h2>
           <select
@@ -497,7 +534,26 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
             ))}
           </select>
         </section>
+        )}
 
+        {settingsTab === 'notebook' && (
+        <section>
+          <h2>筆記換頁方式</h2>
+          <label className="field">
+            捲動換頁
+            <select
+              className="model-select"
+              value={prefs.notebookPageNav}
+              onChange={(event) => setPrefs({ ...prefs, notebookPageNav: event.target.value as NotebookPageNav })}
+            >
+              <option value="vertical">上下連續捲動（預設）</option>
+              <option value="horizontal">左右／按鈕換頁</option>
+            </select>
+          </label>
+        </section>
+        )}
+
+        {settingsTab === 'pencil' && (
         <section>
           <h2>Apple Pencil 與防手掌</h2>
           <p className="os-muted">筆記本與白板螢光筆模式適用。Pencil 透過 pointerType「pen」識別。</p>
@@ -545,7 +601,9 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
             還原 Pencil 預設
           </button>
         </section>
+        )}
 
+        {settingsTab === 'voice' && (
         <section>
           <h2>語音</h2>
           <label className="field">
@@ -582,7 +640,9 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
             </select>
           </label>
         </section>
+        )}
 
+        {settingsTab === 'general' && (
         <section>
           <h2>Token 用量（本機累計）</h2>
           <p className="os-muted">
@@ -601,7 +661,9 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
             歸零統計
           </button>
         </section>
+        )}
 
+        {settingsTab === 'model' && (
         <section>
           <h2>模型與 API</h2>
           <p className="os-muted">金鑰只留在本機 · Grok 必留</p>
@@ -676,6 +738,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
           {modelsLoading && <p className="os-muted">正在取得模型…</p>}
           {modelsNote && <p className="os-muted">{modelsNote}</p>}
         </section>
+        )}
 
         <IconBtn label="儲存設定" className="save-wide" onClick={saveAll}>
           <IconSave />

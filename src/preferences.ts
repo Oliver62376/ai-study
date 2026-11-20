@@ -1,5 +1,6 @@
 export type UploadMode = 'text' | 'ocr' | 'vision'
 export type HomeMode = 'board' | 'chat'
+export type NotebookPageNav = 'vertical' | 'horizontal'
 
 export interface AppPreferences {
   uploadMode: UploadMode
@@ -7,6 +8,7 @@ export interface AppPreferences {
   ttsPitch: number
   ttsVoice: string
   homeMode: HomeMode
+  notebookPageNav: NotebookPageNav
 }
 
 const KEY = 'ai-study-prefs-v1'
@@ -18,6 +20,7 @@ export function defaultPreferences(): AppPreferences {
     ttsPitch: 1,
     ttsVoice: '',
     homeMode: 'board',
+    notebookPageNav: 'vertical',
   }
 }
 

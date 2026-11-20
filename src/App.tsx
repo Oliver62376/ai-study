@@ -4,6 +4,7 @@ import 'katex/dist/katex.min.css'
 import { Laser, Sheet, laserFor, markerColors, type Glow, type Mark } from './board'
 import { ChatView } from './chat-view'
 import { deleteLesson, lessonById, loadLessons, upsertLesson } from './lessons'
+import { NotebookLibrary } from './notebook-hub'
 import { NotebookScreen } from './notebook-ui'
 import type { VisionPage } from './ocr'
 import { loadState, reduce, saveState, snapshot, type State } from './model'
@@ -71,12 +72,16 @@ export default function App() {
   const [hint, setHint] = useState('')
   const [listening, setListening] = useState(false)
   const [exporting, setExporting] = useState(false)
-  const [screen, setScreen] = useState<'home' | 'class' | 'settings' | 'quiz' | 'chat' | 'notebook'>('home')
+  const [screen, setScreen] = useState<'home' | 'class' | 'settings' | 'quiz' | 'chat' | 'notebook' | 'notebook-library'>(
+    'home',
+  )
   const [lessons, setLessons] = useState(() => loadLessons())
   const [activeLessonId, setActiveLessonId] = useState('')
   const [chatSeed, setChatSeed] = useState('')
   const [chatContext, setChatContext] = useState('')
   const [chatVision, setChatVision] = useState<VisionPage[]>([])
+  const [chatSessionKey, setChatSessionKey] = useState('default')
+  const [notebookBookId, setNotebookBookId] = useState<string | undefined>()
   const visionRef = useRef<VisionPage[]>([])
   const [materialWidth, setMaterialWidth] = useState(300)
   const [fullscreen, setFullscreen] = useState(false)
@@ -249,32 +254,34 @@ export default function App() {
       setDraft('')
       return
     }
-    if (state.phase === 'quiz-ask') dispatch({ type: 'answer', text, at: at() })
-    else {
-      let say: string | undefined
+    if (state.phase === 'quiz-ask') {
+      dispatch({ type: 'answer', text, at: at() })
+    } else {
+      dispatch({ type: 'ask', text, at: at() })
       const settings = loadSettings()
-      if (isConnected(settings) && state.course) {
-        try {
-          const context = [
-            ...state.course.sections.map((section) => `${section.title}\n${section.body}`),
-            state.caption,
-          ].join('\n')
-          const raw = await askProvider(
-            settings,
-            text,
-            context,
-            boardToolPrompt(state.course.title, anchorsOf(state.reveals), state.course.audience || gradeLabel()),
-          )
-          if (raw) {
+      const course = stateRef.current.course
+      if (isConnected(settings) && course) {
+        void (async () => {
+          try {
+            const context = [
+              ...course.sections.map((section) => `${section.title}\n${section.body}`),
+              stateRef.current.caption,
+            ].join('\n')
+            const raw = await askProvider(
+              settings,
+              text,
+              context,
+              boardToolPrompt(course.title, anchorsOf(stateRef.current.reveals), course.audience || gradeLabel()),
+            )
+            if (!raw) return
             const turn = parseTeacherTurn(raw, '')
-            say = turn.say
             if (turn.highlights.length) setGlows((current) => [...current, ...turn.highlights])
+            if (turn.say?.trim()) dispatch({ type: 'retell', text: turn.say.trim() })
+          } catch {
+            setHint('這次沒連上模型。')
           }
-        } catch {
-          setHint('這次沒連上模型。')
-        }
+        })()
       }
-      dispatch({ type: 'ask', text, at: at(), say })
     }
     setDraft('')
     void listenStop.current?.()
@@ -395,6 +402,7 @@ export default function App() {
     setChatSeed(topic.trim() || source.slice(0, 200))
     setChatContext(source)
     setChatVision(vision)
+    setChatSessionKey(`chat-${Date.now()}`)
     setScreen('chat')
   }
 
@@ -448,7 +456,12 @@ export default function App() {
         }}
         onStartChat={onStartChat}
         onSettings={() => setScreen('settings')}
-        onNotebook={() => setScreen('notebook')}
+        onNotebook={() => setScreen('notebook-library')}
+        onOpenNotebook={(id) => {
+          setNotebookBookId(id)
+          setScreen('notebook')
+        }}
+        onManageNotebooks={() => setScreen('notebook-library')}
       />
     )
   }
@@ -471,6 +484,7 @@ export default function App() {
           </IconBtn>
         </header>
         <ChatView
+          sessionKey={chatSessionKey}
           seed={chatSeed}
           context={chatContext}
           vision={chatVision.length ? chatVision : visionRef.current}
@@ -480,15 +494,29 @@ export default function App() {
     )
   }
 
+  if (screen === 'notebook-library') {
+    return (
+      <NotebookLibrary
+        onBack={() => setScreen('home')}
+        onOpen={(id) => {
+          setNotebookBookId(id)
+          setScreen('notebook')
+        }}
+      />
+    )
+  }
+
   if (screen === 'notebook') {
     return (
       <NotebookScreen
-        onBack={() => setScreen('home')}
+        initialBookId={notebookBookId}
+        onBack={() => setScreen('notebook-library')}
         onSettings={() => setScreen('settings')}
         onAttach={(text, image) => {
           setChatContext(text)
           setChatVision(image ? [{ name: '筆記', dataUrl: image }] : [])
           setChatSeed('請根據筆記內容說明重點')
+          setChatSessionKey(`chat-${Date.now()}`)
           setScreen('chat')
         }}
       />

@@ -3,13 +3,16 @@ import { flushSync } from 'react-dom'
 import { toPng } from 'html-to-image'
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
-import { pdfPageToJpeg } from './ocr'
+import { renderPdfPage } from './ocr'
+import { loadPreferences } from './preferences'
+import { NotebookToolbar } from './notebook-toolbar'
 import { boardPdf, sharePdf } from './pdf'
 
 GlobalWorkerOptions.workerSrc = workerUrl
 import { IconBack, IconBtn, IconSave } from './icons'
-import { NotebookCanvas, templateLabel, type NbTool } from './notebook-canvas'
-import { runNotebookAi, type NotebookAiMode } from './notebook-ai'
+import { NotebookCanvas, templateLabel, type EraserMode, type NbTool, type ShapeKind } from './notebook-canvas'
+import { NotebookAiPanel } from './notebook-ai-panel'
+import { NotebookPageManager } from './notebook-page-manager'
 import {
   applySnapshot,
   deleteNotebook,
@@ -31,10 +34,12 @@ export function NotebookScreen({
   onBack,
   onAttach,
   onSettings,
+  initialBookId,
 }: {
   onBack: () => void
   onAttach: (text: string, imageDataUrl: string | null) => void
   onSettings: () => void
+  initialBookId?: string
 }) {
   const [books, setBooks] = useState(() => loadNotebooks())
   const [bookId, setBookId] = useState(() => books[0]?.id ?? '')
@@ -45,17 +50,28 @@ export function NotebookScreen({
   const [tool, setTool] = useState<NbTool>('pen')
   const [color, setColor] = useState(PALETTE[0])
   const [width, setWidth] = useState(3)
+  const [shapeKind, setShapeKind] = useState<ShapeKind>('line')
+  const [eraserMode, setEraserMode] = useState<EraserMode>('stroke')
+  const [eraserSize, setEraserSize] = useState(20)
+  const pageNav = loadPreferences().notebookPageNav
   const [lassoIds, setLassoIds] = useState<Set<string>>(() => new Set())
   const [undoStack, setUndoStack] = useState<ReturnType<typeof snapshotPage>[]>([])
   const [redoStack, setRedoStack] = useState<ReturnType<typeof snapshotPage>[]>([])
-  const [aiOpen, setAiOpen] = useState(false)
-  const [aiMode, setAiMode] = useState<NotebookAiMode>('explain')
-  const [aiOut, setAiOut] = useState('')
-  const [aiBusy, setAiBusy] = useState(false)
+  const [aiPanelOpen, setAiPanelOpen] = useState(false)
+  const [aiPreview, setAiPreview] = useState<string | null>(null)
+  const [pageMgrOpen, setPageMgrOpen] = useState(false)
+  const [savingExit, setSavingExit] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [importing, setImporting] = useState(false)
   const lastTool = useRef<NbTool>('pen')
   const captureRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const pageRefs = useRef<Record<string, HTMLDivElement | null>>({})
+
+  useEffect(() => {
+    if (!initialBookId) return
+    if (books.some((item) => item.id === initialBookId)) setBookId(initialBookId)
+  }, [initialBookId, books])
 
   const pushUndo = useCallback(() => {
     if (!page) return
@@ -78,6 +94,50 @@ export function NotebookScreen({
     },
     [book, page, pushUndo],
   )
+
+  const patchPageById = useCallback(
+    (targetPageId: string, patch: Partial<NotePage>) => {
+      if (!book) return
+      const target = book.pages.find((item) => item.id === targetPageId)
+      if (!target) return
+      if (targetPageId === page?.id) pushUndo()
+      const nextPage = { ...target, ...patch, updatedAt: Date.now() }
+      const nextBook: Notebook = {
+        ...book,
+        pages: book.pages.map((item) => (item.id === targetPageId ? nextPage : item)),
+        updatedAt: Date.now(),
+      }
+      upsertNotebook(nextBook)
+      setBooks(loadNotebooks())
+    },
+    [book, page?.id, pushUndo],
+  )
+
+  const scrollToPage = useCallback((id: string) => {
+    pageRefs.current[id]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setPageId(id)
+    setLassoIds(new Set())
+  }, [])
+
+  useEffect(() => {
+    if (pageNav !== 'vertical' || !book || !scrollRef.current) return
+    const root = scrollRef.current
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const hit = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0]
+        const id = hit?.target.getAttribute('data-page-id')
+        if (id) setPageId(id)
+      },
+      { root, threshold: [0.35, 0.55, 0.75] },
+    )
+    for (const item of book.pages) {
+      const node = pageRefs.current[item.id]
+      if (node) observer.observe(node)
+    }
+    return () => observer.disconnect()
+  }, [book, pageNav, book?.pages.length])
 
   function undo() {
     if (!page || !undoStack.length) return
@@ -124,7 +184,7 @@ export function NotebookScreen({
         },
         undo,
         redo,
-        openAi: () => setAiOpen(true),
+        openAi: () => setAiPanelOpen(true),
         toggleTool: () => {
           const next = tool === 'pen' ? 'highlighter' : tool === 'highlighter' ? 'eraser' : 'pen'
           setTool(next)
@@ -139,10 +199,52 @@ export function NotebookScreen({
     }
   }, [tool])
 
+  async function capturePreviewFor(pageId: string, data?: NotePage) {
+    const target = data ?? book?.pages.find((item) => item.id === pageId)
+    if (!target) return undefined
+    const selector =
+      pageNav === 'vertical' ? `.nb-page-block[data-page-id="${pageId}"] .nb-sheet` : '.nb-sheet'
+    const node = captureRef.current?.querySelector(selector)
+    if (!(node instanceof HTMLElement)) return target.preview
+    const bg = target.paperColor ?? '#fbfaf7'
+    return toPng(node, { pixelRatio: 1.5, backgroundColor: bg })
+  }
+
   async function capturePreview() {
-    const node = captureRef.current?.querySelector('.nb-sheet')
-    if (!(node instanceof HTMLElement) || !page) return page.preview
-    return toPng(node, { pixelRatio: 1.5, backgroundColor: '#fbfaf7' })
+    if (!page) return undefined
+    return capturePreviewFor(page.id, page)
+  }
+
+  async function persistAllPages() {
+    if (!book) return
+    const current = pageId
+    const nextPages: NotePage[] = []
+    for (const item of book.pages) {
+      if (item.id !== current) flushSync(() => setPageId(item.id))
+      await new Promise((resolve) => window.setTimeout(resolve, 90))
+      const preview = (await capturePreviewFor(item.id, item)) ?? item.preview
+      nextPages.push({ ...item, preview, updatedAt: Date.now() })
+    }
+    flushSync(() => setPageId(current))
+    const nextBook: Notebook = { ...book, pages: nextPages, updatedAt: Date.now() }
+    upsertNotebook(nextBook)
+    setBooks(loadNotebooks())
+  }
+
+  useEffect(() => {
+    if (!aiPanelOpen || !page) return
+    void capturePreview().then((shot) => setAiPreview(shot ?? page.preview ?? null))
+  }, [aiPanelOpen, page?.id, page?.updatedAt])
+
+  async function exitNotebook() {
+    if (savingExit) return
+    setSavingExit(true)
+    try {
+      await persistAllPages()
+    } finally {
+      setSavingExit(false)
+      onBack()
+    }
   }
 
   async function persistPage() {
@@ -156,13 +258,14 @@ export function NotebookScreen({
     setImporting(true)
     try {
       const data = new Uint8Array(await file.arrayBuffer())
-      const pdf = await getDocument({ data }).promise
+      const pdf = await getDocument({ data: data.slice() }).promise
       const added = []
       const max = Math.min(pdf.numPages, 32)
+      const base = file.name.replace(/\.pdf$/i, '') || 'PDF'
       for (let index = 1; index <= max; index += 1) {
-        const jpeg = await pdfPageToJpeg(data, index, 1.5)
+        const jpeg = await renderPdfPage(pdf, index, 1.5)
         added.push({
-          ...emptyPage(file.name.replace(/\.pdf$/i, '') + ` 第 ${index} 頁`, 'blank'),
+          ...emptyPage(`${base} 第 ${index} 頁`, 'blank'),
           background: jpeg,
         })
       }
@@ -170,6 +273,8 @@ export function NotebookScreen({
       upsertNotebook(next)
       setBooks(loadNotebooks())
       if (added[0]) setPageId(added[0].id)
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'PDF 匯入失敗')
     } finally {
       setImporting(false)
     }
@@ -222,28 +327,14 @@ export function NotebookScreen({
     setPageId(next.pages[0]?.id ?? '')
   }
 
-  async function runAi() {
-    if (!page || !book) return
-    setAiBusy(true)
-    setAiOut('')
-    try {
-      const preview = (await capturePreview()) ?? page.preview ?? null
-      const context = [page.caption, ...page.texts.map((t) => t.text)].filter(Boolean).join('\n')
-      const answer = await runNotebookAi(aiMode, context, preview)
-      setAiOut(answer)
-    } catch (error) {
-      setAiOut(error instanceof Error ? error.message : 'AI 失敗')
-    } finally {
-      setAiBusy(false)
-    }
-  }
-
   if (!book || !page) return null
+
+  const pageAiContext = [page.caption, ...page.texts.map((t) => t.text)].filter(Boolean).join('\n')
 
   return (
     <div className="nb-app os-page">
       <header className="os-topbar glass-bar">
-        <IconBtn label="返回" onClick={onBack}>
+        <IconBtn label={savingExit ? '儲存中' : '返回'} disabled={savingExit} onClick={() => void exitNotebook()}>
           <IconBack />
         </IconBtn>
         <input
@@ -320,12 +411,15 @@ export function NotebookScreen({
                 key={item.id}
                 type="button"
                 className={`nb-thumb${item.id === pageId ? ' on' : ''}`}
-                onClick={() => setPageId(item.id)}
+                onClick={() => (pageNav === 'vertical' ? scrollToPage(item.id) : setPageId(item.id))}
               >
                 {item.preview ? <img src={item.preview} alt="" /> : <span>{item.title}</span>}
               </button>
             ))}
           </div>
+          <button type="button" className="os-primary nb-page-mgr-open" onClick={() => setPageMgrOpen(true)}>
+            頁面管理
+          </button>
           <div className="nb-page-actions">
             <button type="button" onClick={() => addPage(page.template)}>
               ＋頁
@@ -351,6 +445,14 @@ export function NotebookScreen({
               ))}
             </select>
           </label>
+          <label className="nb-select nb-color-wheel">
+            背景色
+            <input
+              type="color"
+              value={page.paperColor ?? '#fbfaf7'}
+              onChange={(event) => patchPage({ paperColor: event.target.value })}
+            />
+          </label>
 
           <label className="notebook-caption">
             本頁重點（給 AI）
@@ -358,17 +460,22 @@ export function NotebookScreen({
           </label>
         </aside>
 
-        <div className="nb-main">
-          <NotebookToolBar
+        <div className="nb-main no-select">
+          <NotebookToolbar
             tool={tool}
             color={color}
             width={width}
+            shapeKind={shapeKind}
+            eraserMode={eraserMode}
+            eraserSize={eraserSize}
             onTool={setTool}
             onColor={setColor}
             onWidth={setWidth}
+            onShapeKind={setShapeKind}
+            onEraserMode={setEraserMode}
+            onEraserSize={setEraserSize}
             onUndo={undo}
             onRedo={redo}
-            onAi={() => setAiOpen(true)}
             onInsertImage={async (file) => {
               const dataUrl = await readImage(file)
               patchPage({
@@ -385,145 +492,160 @@ export function NotebookScreen({
               })
             }}
           />
-
-          <div ref={captureRef}>
-            <NotebookCanvas
-              page={page}
-              tool={tool}
-              color={color}
-              baseWidth={width}
-              lassoIds={lassoIds}
-              onLasso={setLassoIds}
-              onChange={(patch) => patchPage(patch)}
-              onPencilShortcut={(slot) => {
-                const prefs = loadStylusPreferences()
-                const action: StylusAction =
-                  slot === 'barrel1'
-                    ? prefs.barrelButton1
-                    : slot === 'barrel2'
-                      ? prefs.barrelButton2
-                      : slot === 'doubleTap'
-                        ? prefs.doubleTap
-                        : prefs.eraserEnd
-                runStylusAction(action, {
-                  setTool: (t) => setTool(t),
-                  undo,
-                  redo,
-                  openAi: () => setAiOpen(true),
-                  toggleTool: () => setTool((current) => (current === 'pen' ? 'highlighter' : current === 'highlighter' ? 'eraser' : 'pen')),
-                })
-              }}
-            />
+          {pageNav === 'horizontal' && (
+            <div className="nb-page-nav">
+              <button
+                type="button"
+                disabled={book.pages.findIndex((item) => item.id === pageId) <= 0}
+                onClick={() => {
+                  const index = book.pages.findIndex((item) => item.id === pageId)
+                  if (index > 0) setPageId(book.pages[index - 1].id)
+                }}
+              >
+                上一頁
+              </button>
+              <span>
+                {book.pages.findIndex((item) => item.id === pageId) + 1} / {book.pages.length}
+              </span>
+              <button
+                type="button"
+                disabled={book.pages.findIndex((item) => item.id === pageId) >= book.pages.length - 1}
+                onClick={() => {
+                  const index = book.pages.findIndex((item) => item.id === pageId)
+                  if (index < book.pages.length - 1) setPageId(book.pages[index + 1].id)
+                }}
+              >
+                下一頁
+              </button>
+            </div>
+          )}
+          <div
+            className={`nb-pages-scroll nb-nav-${pageNav}`}
+            ref={(node) => {
+              captureRef.current = node
+              scrollRef.current = node
+            }}
+          >
+            {pageNav === 'vertical'
+              ? book.pages.map((item) => (
+                  <div
+                    key={item.id}
+                    className={`nb-page-block${item.id === pageId ? ' active' : ''}`}
+                    data-page-id={item.id}
+                    ref={(node) => {
+                      pageRefs.current[item.id] = node
+                    }}
+                  >
+                    <NotebookCanvas
+                      page={item}
+                      tool={tool}
+                      color={color}
+                      baseWidth={width}
+                      shapeKind={shapeKind}
+                      eraserMode={eraserMode}
+                      eraserSize={eraserSize}
+                      lassoIds={item.id === pageId ? lassoIds : new Set()}
+                      onLasso={item.id === pageId ? setLassoIds : () => {}}
+                      onChange={(patch) => patchPageById(item.id, patch)}
+                      onPencilShortcut={(slot) => {
+                        if (item.id !== pageId) {
+                          scrollToPage(item.id)
+                          return
+                        }
+                        const prefs = loadStylusPreferences()
+                        const action: StylusAction =
+                          slot === 'barrel1'
+                            ? prefs.barrelButton1
+                            : slot === 'barrel2'
+                              ? prefs.barrelButton2
+                              : slot === 'doubleTap'
+                                ? prefs.doubleTap
+                                : prefs.eraserEnd
+                        runStylusAction(action, {
+                          setTool: (t) => setTool(t),
+                          undo,
+                          redo,
+                          openAi: () => setAiPanelOpen(true),
+                          toggleTool: () =>
+                            setTool((current) => (current === 'pen' ? 'highlighter' : current === 'highlighter' ? 'eraser' : 'pen')),
+                        })
+                      }}
+                    />
+                  </div>
+                ))
+              : (
+                  <NotebookCanvas
+                    page={page}
+                    tool={tool}
+                    color={color}
+                    baseWidth={width}
+                    shapeKind={shapeKind}
+                    eraserMode={eraserMode}
+                    eraserSize={eraserSize}
+                    lassoIds={lassoIds}
+                    onLasso={setLassoIds}
+                    onChange={(patch) => patchPage(patch)}
+                    onPencilShortcut={(slot) => {
+                      const prefs = loadStylusPreferences()
+                      const action: StylusAction =
+                        slot === 'barrel1'
+                          ? prefs.barrelButton1
+                          : slot === 'barrel2'
+                            ? prefs.barrelButton2
+                            : slot === 'doubleTap'
+                              ? prefs.doubleTap
+                              : prefs.eraserEnd
+                      runStylusAction(action, {
+                        setTool: (t) => setTool(t),
+                        undo,
+                        redo,
+                        openAi: () => setAiPanelOpen(true),
+                        toggleTool: () =>
+                          setTool((current) => (current === 'pen' ? 'highlighter' : current === 'highlighter' ? 'eraser' : 'pen')),
+                      })
+                    }}
+                  />
+                )}
           </div>
         </div>
 
-        {aiOpen && (
-          <aside className="nb-ai-panel glass-panel">
-            <h2>筆記 AI</h2>
-            <div className="nb-ai-modes">
-              {(
-                [
-                  ['explain', '解釋'],
-                  ['summarize', '整理'],
-                  ['quiz', '出題'],
-                  ['clean', '清稿'],
-                ] as const
-              ).map(([id, label]) => (
-                <button key={id} type="button" className={aiMode === id ? 'on' : ''} onClick={() => setAiMode(id)}>
-                  {label}
-                </button>
-              ))}
-            </div>
-            <button type="button" className="os-primary" disabled={aiBusy} onClick={() => void runAi()}>
-              {aiBusy ? '處理中…' : '執行'}
-            </button>
-            {aiOut && <div className="nb-ai-out">{aiOut}</div>}
-            <button type="button" onClick={() => setAiOpen(false)}>
-              關閉
-            </button>
-          </aside>
+        {!aiPanelOpen && (
+          <button type="button" className="nb-ai-fab" aria-label="開啟筆記 AI" onClick={() => setAiPanelOpen(true)}>
+            AI
+          </button>
+        )}
+        {aiPanelOpen && (
+          <NotebookAiPanel
+            bookId={book.id}
+            pageTitle={page.title}
+            pageContext={pageAiContext}
+            pagePreview={aiPreview ?? page.preview ?? null}
+            onClose={() => setAiPanelOpen(false)}
+            onSettings={onSettings}
+          />
+        )}
+        {pageMgrOpen && (
+          <NotebookPageManager
+            book={book}
+            currentPageId={pageId}
+            onClose={() => setPageMgrOpen(false)}
+            onApply={(pages) => {
+              const next = { ...book, pages, updatedAt: Date.now() }
+              upsertNotebook(next)
+              setBooks(loadNotebooks())
+              if (!pages.some((item) => item.id === pageId)) setPageId(pages[0]?.id ?? '')
+            }}
+            onCapturePreview={async (id) => {
+              const previous = pageId
+              if (id !== previous) flushSync(() => setPageId(id))
+              await new Promise((resolve) => window.setTimeout(resolve, 100))
+              const shot = await capturePreviewFor(id)
+              if (id !== previous) flushSync(() => setPageId(previous))
+              return shot
+            }}
+          />
         )}
       </div>
-    </div>
-  )
-}
-
-function NotebookToolBar({
-  tool,
-  color,
-  width,
-  onTool,
-  onColor,
-  onWidth,
-  onUndo,
-  onRedo,
-  onAi,
-  onInsertImage,
-  onAttach,
-}: {
-  tool: NbTool
-  color: string
-  width: number
-  onTool: (t: NbTool) => void
-  onColor: (c: string) => void
-  onWidth: (n: number) => void
-  onUndo: () => void
-  onRedo: () => void
-  onAi: () => void
-  onInsertImage: (file: File) => void
-  onAttach: () => void
-}) {
-  const tools: [NbTool, string][] = [
-    ['pen', '筆'],
-    ['fountain', '鋼筆'],
-    ['highlighter', '螢光'],
-    ['eraser', '橡皮'],
-    ['lasso', '套索'],
-    ['line', '直線'],
-    ['rect', '方框'],
-    ['ellipse', '圓'],
-    ['text', '文字'],
-    ['pan', '移動'],
-  ]
-  return (
-    <div className="nb-toolbar">
-      {tools.map(([id, label]) => (
-        <button key={id} type="button" className={tool === id ? 'on' : ''} aria-pressed={tool === id} onClick={() => onTool(id)}>
-          {label}
-        </button>
-      ))}
-      <span className="nb-toolbar-sep" />
-      {PALETTE.map((swatch) => (
-        <button key={swatch} type="button" className="swatch" style={{ background: swatch }} aria-pressed={color === swatch} onClick={() => onColor(swatch)} />
-      ))}
-      <label className="nb-width">
-        粗細 {width}
-        <input type="range" min={1} max={10} value={width} onChange={(event) => onWidth(Number(event.target.value))} />
-      </label>
-      <button type="button" onClick={onUndo}>
-        復原
-      </button>
-      <button type="button" onClick={onRedo}>
-        重做
-      </button>
-      <button type="button" onClick={onAi}>
-        AI
-      </button>
-      <label className="nb-insert-image">
-        圖片
-        <input
-          type="file"
-          accept="image/*"
-          onChange={(event) => {
-            const file = event.target.files?.[0]
-            event.target.value = ''
-            if (file) void onInsertImage(file)
-          }}
-        />
-      </label>
-      <button type="button" onClick={onAttach}>
-        教材
-      </button>
     </div>
   )
 }

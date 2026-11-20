@@ -39,6 +39,7 @@ export interface NotePage {
   id: string
   title: string
   template: PageTemplate
+  paperColor?: string
   caption: string
   strokes: InkStroke[]
   texts: TextBox[]
@@ -51,6 +52,7 @@ export interface NotePage {
 export interface Notebook {
   id: string
   title: string
+  folderId?: string
   pages: NotePage[]
   updatedAt: number
 }
@@ -130,17 +132,32 @@ export function defaultNotebook(): Notebook {
   return { id: newId('B'), title: '我的筆記', pages: [page], updatedAt: Date.now() }
 }
 
-export function emptyPage(title: string, template: PageTemplate = 'ruled'): NotePage {
+export function emptyPage(title: string, template: PageTemplate = 'ruled', paperColor = '#fbfaf7'): NotePage {
   return {
     id: newId('P'),
     title,
     template,
+    paperColor,
     caption: '',
     strokes: [],
     texts: [],
     stickers: [],
     updatedAt: Date.now(),
   }
+}
+
+export function bookCover(book: Notebook) {
+  return book.pages[0]?.preview ?? book.pages[0]?.background ?? ''
+}
+
+export function moveNotebookToFolder(bookId: string, folderId: string | undefined) {
+  const list = loadNotebooks().map((item) => (item.id === bookId ? { ...item, folderId } : item))
+  saveNotebooks(list)
+}
+
+export function renameNotebook(bookId: string, title: string) {
+  const list = loadNotebooks().map((item) => (item.id === bookId ? { ...item, title: title.trim() || item.title } : item))
+  saveNotebooks(list)
 }
 
 export function saveNotebooks(books: Notebook[]) {

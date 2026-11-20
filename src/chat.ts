@@ -28,7 +28,7 @@ export function chatSystem(audience: string) {
     '你是課業助教。用繁體中文，清楚回答學生的問題。',
     audience.trim() ? `對象：${audience.trim()}。用詞要符合程度。` : '',
     '不要假設科目；依學生問題與附件內容回答。',
-    '簡短分段，必要時用例子。不要使用 markdown 標題。',
+    '簡短分段，必要時用例子。不要使用 markdown 標題；不要用 # 或 *。',
   ]
     .filter(Boolean)
     .join('\n')

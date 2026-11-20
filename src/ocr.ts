@@ -27,8 +27,11 @@ export async function ocrDataUrl(dataUrl: string): Promise<string> {
   }
 }
 
-export async function pdfPageToJpeg(data: Uint8Array, pageNumber: number, scale = 1.6): Promise<string> {
-  const pdf = await getDocument({ data }).promise
+export async function renderPdfPage(
+  pdf: Awaited<ReturnType<typeof getDocument>['promise']>,
+  pageNumber: number,
+  scale = 1.6,
+): Promise<string> {
   const page = await pdf.getPage(pageNumber)
   const viewport = page.getViewport({ scale })
   const canvas = document.createElement('canvas')
@@ -38,6 +41,11 @@ export async function pdfPageToJpeg(data: Uint8Array, pageNumber: number, scale 
   if (!ctx) throw new Error('canvas')
   await page.render({ canvasContext: ctx, viewport, canvas } as Parameters<typeof page.render>[0]).promise
   return canvas.toDataURL('image/jpeg', 0.82)
+}
+
+export async function pdfPageToJpeg(data: Uint8Array, pageNumber: number, scale = 1.6): Promise<string> {
+  const pdf = await getDocument({ data: data.slice() }).promise
+  return renderPdfPage(pdf, pageNumber, scale)
 }
 
 export async function imageFileToJpeg(file: File): Promise<string> {
