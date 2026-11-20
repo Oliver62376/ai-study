@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { formatAiPlainText, noMarkdownHint } from './ai-format'
 import { appendExtra, loadCustomPrompts } from './custom-prompts'
 import {
@@ -49,8 +50,8 @@ export function NotebookAiPanel({
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
   const [attachPageImage, setAttachPageImage] = useState(true)
-  const drag = useRef<{ ox: number; oy: number; px: number; py: number } | null>(null)
   const logRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setLines(loadNbAiThread(bookId))
@@ -113,41 +114,52 @@ export function NotebookAiPanel({
     }
   }
 
+  const clampPos = useCallback((x: number, y: number) => {
+    const pad = 8
+    const top = 52
+    const el = panelRef.current
+    const w = el?.offsetWidth ?? 380
+    const h = el?.offsetHeight ?? 420
+    const maxX = Math.max(pad, window.innerWidth - w - pad)
+    const maxY = Math.max(top, window.innerHeight - h - pad)
+    return {
+      x: Math.min(maxX, Math.max(pad, x)),
+      y: Math.min(maxY, Math.max(top, y)),
+    }
+  }, [])
+
   function onHeaderPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.button !== 0) return
-    drag.current = { ox: event.clientX, oy: event.clientY, px: pos.x, py: pos.y }
-    event.currentTarget.setPointerCapture(event.pointerId)
-  }
-
-  function onHeaderPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
-    if (!drag.current) return
-    const dx = event.clientX - drag.current.ox
-    const dy = event.clientY - drag.current.oy
-    setPos({
-      x: Math.max(8, drag.current.px + dx),
-      y: Math.max(56, drag.current.py + dy),
-    })
-  }
-
-  function onHeaderPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
-    drag.current = null
-    try {
-      event.currentTarget.releasePointerCapture(event.pointerId)
-    } catch {
-      /* ignore */
+    const target = event.target as HTMLElement
+    if (target.closest('button, a, input, label')) return
+    event.preventDefault()
+    const start = { ox: event.clientX, oy: event.clientY, px: pos.x, py: pos.y }
+  const onMove = (ev: PointerEvent) => {
+      const next = clampPos(start.px + ev.clientX - start.ox, start.py + ev.clientY - start.oy)
+      setPos(next)
     }
+    const end = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', end)
+      window.removeEventListener('pointercancel', end)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', end)
+    window.addEventListener('pointercancel', end)
   }
 
-  return (
-    <div className="nb-ai-float glass-panel" style={{ left: pos.x, top: pos.y }} role="dialog" aria-label="筆記 AI">
-      <div
-        className="nb-ai-float-head"
-        onPointerDown={onHeaderPointerDown}
-        onPointerMove={onHeaderPointerMove}
-        onPointerUp={onHeaderPointerUp}
-        onPointerCancel={onHeaderPointerUp}
-      >
-        <span className="nb-ai-float-title">筆記 AI</span>
+  const panel = (
+    <div
+      ref={panelRef}
+      className="nb-ai-float glass-panel"
+      style={{ left: pos.x, top: pos.y }}
+      role="dialog"
+      aria-label="筆記 AI"
+    >
+      <div className="nb-ai-float-head" onPointerDown={onHeaderPointerDown}>
+        <span className="nb-ai-float-title">
+          筆記 AI <span className="nb-ai-drag-hint">· 拖曳此列移動</span>
+        </span>
         <button type="button" className="nb-ai-close" aria-label="關閉" onClick={onClose}>
           <IconCloseGlyph />
         </button>
@@ -199,6 +211,9 @@ export function NotebookAiPanel({
       </div>
     </div>
   )
+
+  if (typeof document === 'undefined') return panel
+  return createPortal(panel, document.body)
 }
 
 function AiModeBar({

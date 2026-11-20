@@ -1,0 +1,60 @@
+name: Build Native iPad IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - 'native/**'
+      - '.github/workflows/ios-native.yml'
+
+jobs:
+  ipa:
+    runs-on: macos-15
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read native version and channel
+        id: meta
+        run: |
+          ver=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' native/AIStudy/Info.plist)
+          channel=$(tr -d '[:space:]' < native/RELEASE_CHANNEL 2>/dev/null || echo beta)
+          suffix=""
+          if [ "$channel" = "beta" ]; then suffix="-beta"; fi
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "suffix=$suffix" >> "$GITHUB_OUTPUT"
+          echo "artifact=AI-Study-native-ipad-${ver}${suffix}" >> "$GITHUB_OUTPUT"
+
+      - name: Build AIStudy (device, no signing team in CI)
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project native/AIStudy.xcodeproj \
+            -scheme AIStudy \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$PWD/build/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            TARGETED_DEVICE_FAMILY=2 \
+            build
+          APP="$(find build/DerivedData/Build/Products -type d -name 'AIStudy.app' | head -n 1)"
+          test -n "$APP"
+          rm -rf Payload
+          mkdir Payload
+          cp -R "$APP" Payload/
+          IPA_NAME="${{ steps.meta.outputs.artifact }}.ipa"
+          zip -qry "$IPA_NAME" Payload
+          unzip -t "$IPA_NAME"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.meta.outputs.artifact }}
+          path: AI-Study-native-ipad-*.ipa
+          if-no-files-found: error

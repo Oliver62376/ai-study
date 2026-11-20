@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { IconBack, IconBtn, IconBook, IconTrash } from './icons'
 import { createFolder, loadFolders, type NotebookFolder } from './notebook-folders'
+import { pagesFromPdfFile } from './notebook-pdf-import'
 import {
   deleteNotebook,
   emptyPage,
@@ -64,6 +65,7 @@ export function NotebookLibrary({
   const [books, setBooks] = useState(() => loadNotebooks())
   const [folders, setFolders] = useState<NotebookFolder[]>(() => loadFolders())
   const [folderId, setFolderId] = useState<string>('all')
+  const [pdfBusy, setPdfBusy] = useState(false)
 
   const visible = useMemo(() => {
     if (folderId === 'all') return books
@@ -84,6 +86,22 @@ export function NotebookLibrary({
     onOpen(nb.id)
   }
 
+  async function createBookFromPdf(file: File) {
+    setPdfBusy(true)
+    try {
+      const { title, pages } = await pagesFromPdfFile(file)
+      const nb: Notebook = { id: newId('B'), title, pages, updatedAt: Date.now() }
+      if (folderId !== 'all' && folderId !== 'none') nb.folderId = folderId
+      upsertNotebook(nb)
+      refresh()
+      onOpen(nb.id)
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'PDF 匯入失敗')
+    } finally {
+      setPdfBusy(false)
+    }
+  }
+
   return (
     <div className="os-page os-page-glass nb-library">
       <div className="os-aurora" aria-hidden />
@@ -95,6 +113,19 @@ export function NotebookLibrary({
         <button type="button" className="os-primary nb-lib-new" onClick={createBook}>
           ＋ 新筆記本
         </button>
+        <label className="nb-lib-pdf-new">
+          {pdfBusy ? '匯入中…' : '從 PDF 建立'}
+          <input
+            type="file"
+            accept="application/pdf,.pdf"
+            disabled={pdfBusy}
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              event.target.value = ''
+              if (file) void createBookFromPdf(file)
+            }}
+          />
+        </label>
       </header>
       <div className="nb-library-body">
         <aside className="nb-library-folders glass-rail">

@@ -1,14 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { toPng } from 'html-to-image'
-import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
-import { renderPdfPage } from './ocr'
+import { pagesFromPdfFile } from './notebook-pdf-import'
 import { loadPreferences } from './preferences'
 import { NotebookToolbar } from './notebook-toolbar'
 import { boardPdf, sharePdf } from './pdf'
 
-GlobalWorkerOptions.workerSrc = workerUrl
 import { IconBack, IconBtn, IconShare, IconSettings } from './icons'
 import { NotebookCanvas, templateLabel, type EraserMode, type NbTool, type ShapeKind } from './notebook-canvas'
 import { NotebookAiPanel } from './notebook-ai-panel'
@@ -252,18 +249,7 @@ export function NotebookScreen({
     if (!book) return
     setImporting(true)
     try {
-      const data = new Uint8Array(await file.arrayBuffer())
-      const pdf = await getDocument({ data: data.slice() }).promise
-      const added = []
-      const max = Math.min(pdf.numPages, 32)
-      const base = file.name.replace(/\.pdf$/i, '') || 'PDF'
-      for (let index = 1; index <= max; index += 1) {
-        const jpeg = await renderPdfPage(pdf, index, 1.5)
-        added.push({
-          ...emptyPage(`${base} 第 ${index} 頁`, 'blank'),
-          background: jpeg,
-        })
-      }
+      const { pages: added } = await pagesFromPdfFile(file)
       const next: Notebook = { ...book, pages: [...book.pages, ...added], updatedAt: Date.now() }
       upsertNotebook(next)
       setBooks(loadNotebooks())
@@ -388,8 +374,11 @@ export function NotebookScreen({
           />
         </div>
 
+        {railOpen && (
+          <button type="button" className="nb-drawer-backdrop" aria-label="關閉側欄" onClick={() => setRailOpen(false)} />
+        )}
         <div className="nb-body nb-body-gn">
-        <aside className={`nb-sidebar nb-sidebar-drawer${railOpen ? ' open' : ''}`}>
+        <aside className={`nb-sidebar nb-sidebar-drawer${railOpen ? ' open' : ''}`} aria-hidden={!railOpen}>
           <label className="nb-select">
             筆記本
             <select value={bookId} onChange={(event) => setBookId(event.target.value)}>
@@ -413,6 +402,35 @@ export function NotebookScreen({
           >
             ＋ 新筆記本
           </button>
+          <label className="nb-import-pdf-side">
+            {importing ? '匯入 PDF…' : '從 PDF 新建筆記本'}
+            <input
+              type="file"
+              accept="application/pdf,.pdf"
+              disabled={importing}
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                event.target.value = ''
+                if (!file) return
+                void (async () => {
+                  setImporting(true)
+                  try {
+                    const { title, pages } = await pagesFromPdfFile(file)
+                    const nb: Notebook = { id: newId('B'), title, pages, updatedAt: Date.now() }
+                    upsertNotebook(nb)
+                    setBooks(loadNotebooks())
+                    setBookId(nb.id)
+                    setPageId(nb.pages[0].id)
+                    setRailOpen(false)
+                  } catch (error) {
+                    window.alert(error instanceof Error ? error.message : 'PDF 匯入失敗')
+                  } finally {
+                    setImporting(false)
+                  }
+                })()
+              }}
+            />
+          </label>
           {books.length > 1 && (
             <button type="button" className="os-link-btn danger" onClick={() => { deleteNotebook(bookId); setBooks(loadNotebooks()); setBookId(loadNotebooks()[0]?.id ?? '') }}>
               刪除此本
