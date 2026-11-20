@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum AppSection: String, CaseIterable, Identifiable {
+enum AppSection: String, CaseIterable, Identifiable, Hashable {
     case home
     case notebook
     case classroom
@@ -38,9 +38,11 @@ struct RootView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(AppSection.allCases, selection: $section) { item in
-                Label(item.title, systemImage: item.systemImage)
-                    .tag(item)
+            List(selection: $section) {
+                ForEach(AppSection.allCases) { item in
+                    Label(item.title, systemImage: item.systemImage)
+                        .tag(item)
+                }
             }
             .navigationTitle("AI Study")
         } detail: {
