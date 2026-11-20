@@ -54,4 +54,17 @@ extension Notebook {
         try? context.save()
         return book
     }
+
+    static func makeFromPDF(at url: URL, in context: ModelContext) throws -> Notebook {
+        let access = url.startAccessingSecurityScopedResource()
+        defer { if access { url.stopAccessingSecurityScopedResource() } }
+        let (title, pages) = try PDFImportService.pagesFromPDF(at: url)
+        let book = Notebook(title: title, pages: pages)
+        for page in pages {
+            page.notebook = book
+        }
+        context.insert(book)
+        try context.save()
+        return book
+    }
 }

@@ -16,6 +16,12 @@
 		A10000010000000000000007 /* NotebookLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000007 /* NotebookLibraryView.swift */; };
 		A10000010000000000000008 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000008 /* SettingsView.swift */; };
 		A10000010000000000000009 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000009 /* Assets.xcassets */; };
+		A1000001000000000000000A /* NotebookPageSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000B /* NotebookPageSheetView.swift */; };
+		A1000001000000000000000B /* NotebookInkToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000C /* NotebookInkToolbar.swift */; };
+		A1000001000000000000000C /* PageManagerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000D /* PageManagerSheet.swift */; };
+		A1000001000000000000000D /* PDFImportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000E /* PDFImportService.swift */; };
+		A1000001000000000000000E /* NotebookPDFExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000F /* NotebookPDFExport.swift */; };
+		A1000001000000000000000F /* NotebookTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000010 /* NotebookTheme.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -30,6 +36,12 @@
 		A20000010000000000000008 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A20000010000000000000009 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A2000001000000000000000A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A2000001000000000000000B /* NotebookPageSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookPageSheetView.swift; sourceTree = "<group>"; };
+		A2000001000000000000000C /* NotebookInkToolbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookInkToolbar.swift; sourceTree = "<group>"; };
+		A2000001000000000000000D /* PageManagerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageManagerSheet.swift; sourceTree = "<group>"; };
+		A2000001000000000000000E /* PDFImportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFImportService.swift; sourceTree = "<group>"; };
+		A2000001000000000000000F /* NotebookPDFExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookPDFExport.swift; sourceTree = "<group>"; };
+		A20000010000000000000010 /* NotebookTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookTheme.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -57,6 +69,8 @@
 				A20000010000000000000001 /* AIStudyApp.swift */,
 				A40000010000000000000003 /* App */,
 				A40000010000000000000004 /* Data */,
+				A40000010000000000000009 /* Services */,
+				A4000001000000000000000A /* UI */,
 				A40000010000000000000005 /* Features */,
 				A20000010000000000000009 /* Assets.xcassets */,
 				A2000001000000000000000A /* Info.plist */,
@@ -112,8 +126,28 @@
 				A20000010000000000000005 /* PencilCanvasView.swift */,
 				A20000010000000000000006 /* NotebookEditorView.swift */,
 				A20000010000000000000007 /* NotebookLibraryView.swift */,
+				A2000001000000000000000B /* NotebookPageSheetView.swift */,
+				A2000001000000000000000C /* NotebookInkToolbar.swift */,
+				A2000001000000000000000D /* PageManagerSheet.swift */,
 			);
 			path = Notebook;
+			sourceTree = "<group>";
+		};
+		A40000010000000000000009 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				A2000001000000000000000E /* PDFImportService.swift */,
+				A2000001000000000000000F /* NotebookPDFExport.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		A4000001000000000000000A /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				A20000010000000000000010 /* NotebookTheme.swift */,
+			);
+			path = UI;
 			sourceTree = "<group>";
 		};
 		A40000010000000000000008 /* Settings */ = {
@@ -202,6 +236,12 @@
 				A10000010000000000000006 /* NotebookEditorView.swift in Sources */,
 				A10000010000000000000007 /* NotebookLibraryView.swift in Sources */,
 				A10000010000000000000008 /* SettingsView.swift in Sources */,
+				A1000001000000000000000A /* NotebookPageSheetView.swift in Sources */,
+				A1000001000000000000000B /* NotebookInkToolbar.swift in Sources */,
+				A1000001000000000000000C /* PageManagerSheet.swift in Sources */,
+				A1000001000000000000000D /* PDFImportService.swift in Sources */,
+				A1000001000000000000000E /* NotebookPDFExport.swift in Sources */,
+				A1000001000000000000000F /* NotebookTheme.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -253,7 +293,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.oliver62376.aistudy.native;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -278,7 +318,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.oliver62376.aistudy.native;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
