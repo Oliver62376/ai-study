@@ -13,9 +13,10 @@ export function anchorsOf(reveals: Reveal[]) {
   return [...new Set(ids)]
 }
 
-export function boardToolPrompt(title: string, anchors: string[]) {
+export function boardToolPrompt(title: string, anchors: string[], audience: string) {
+  const who = audience.trim() ? `教學對象：${audience.trim()}。用詞與例子要符合這個年級。` : ''
   return [
-    `你是白板老師，正在講「${title || '這一課'}」。科目以教材為準，不要假設是哪一科。`,
+    `你是白板老師，正在講「${title || '這一課'}」。科目以教材為準，不要假設是哪一科。${who}`,
     '回覆必須是一個 JSON 物件，不要加 markdown。',
     '{"say":"要念出來的話","highlights":[{"page":0,"anchor":"某個已存在的id","color":"yellow"}]}',
     'say：用教材的語言，兩到四句，適合直接念出來，不要列點。',
@@ -27,9 +28,10 @@ export function boardToolPrompt(title: string, anchors: string[]) {
 }
 
 export function planPrompt(source: string, audience: string) {
+  const who = audience.trim() ? `教學對象：${audience.trim()}。用詞、例子、步調要符合這個年級。` : '教學對象沒有指定，依來源自己判斷。'
   return [
     '把下面的來源編成一堂課。只講來源裡有的內容。來源只是一個主題時，就講這個主題，不要換成別的課，也不要假設是物理。',
-    audience.trim() ? `教學對象：${audience.trim()}` : '教學對象沒有指定，依來源自己判斷。',
+    who,
     '只回 JSON，不要 markdown。',
     '{"title":"課名","sections":[{"id":"s1","title":"小標","body":"這一段教材"}],"steps":[{"id":"p1","say":"要念的兩到四句","material":"s1","reveals":[{"type":"text","id":"t1","page":0,"variant":"title","text":"板書標題"},{"type":"text","id":"t2","page":0,"variant":"body","text":"一句定義"},{"type":"formula","id":"f1","page":1,"latex":"a=b","plain":"a=b"},{"type":"note","id":"n1","page":1,"anchor":"f1","text":"旁註"}]}]}',
     '4 到 8 段。每段 1 到 4 個板書。page 從 0 開始，換一個主題就換頁。',
@@ -137,10 +139,12 @@ function parseReveals(value: unknown, seen: Set<string>): Reveal[] {
   return reveals
 }
 
-export function quizPrompt(difficulty: Difficulty, count: number) {
+export function quizPrompt(difficulty: Difficulty, count: number, audience: string) {
   const name = difficulty === 'easy' ? '容易' : difficulty === 'hard' ? '難' : '中等'
+  const who = audience.trim() ? `教學對象：${audience.trim()}。` : ''
   return [
     '你是出題老師。只根據下面的教材出題，不要超出教材。',
+    who,
     `難易度：${name}。題數：${count}。`,
     '只回 JSON，不要 markdown：{"questions":[{"prompt":"題目","kind":"choice","choices":["A","B","C"],"accept":["正確選項原文"],"explain":"一句檢討"}]}',
     'kind 為 choice 時 choices 要有 3 個，accept 必須是 choices 裡的其中一個原文。',

@@ -1,15 +1,18 @@
 import { useState } from 'react'
-import { grade, type Difficulty, type QuizQ } from './model'
+import { gradeLabel } from './profile'
+import { grade as scoreAnswer, type Difficulty, type QuizQ } from './model'
 import { parseQuiz, quizPrompt } from './prompt'
 import { askProvider, isConnected, loadSettings } from './settings'
-import { IpadFrame } from './shell'
+import { ShellPage } from './shell'
 
 export function QuizScreen({
   materialText,
+  audience,
   onClose,
   onSettings,
 }: {
   materialText: string
+  audience: string
   onClose: () => void
   onSettings: () => void
 }) {
@@ -28,21 +31,22 @@ export function QuizScreen({
   async function begin() {
     const settings = loadSettings()
     if (!materialText.trim()) {
-      setEmptyText('還沒有教材。先在首頁貼上內容並備課。')
+      setEmptyText('還沒有教材。先在首頁開一堂課。')
       setPhase('empty')
       return
     }
     if (!isConnected(settings)) {
-      setEmptyText('測驗由模型依這份教材出題。先到「模型」接上 API。')
+      setEmptyText('測驗由模型依這份教材出題。請先接上模型。')
       setPhase('empty')
       return
     }
     setBusy(true)
     let next: QuizQ[] = []
+    const who = audience.trim() || gradeLabel()
     try {
       const raw = await askProvider(
         settings,
-        quizPrompt(difficulty, count),
+        quizPrompt(difficulty, count, who),
         materialText,
         '你只負責依教材出題。照使用者要求的 JSON 格式回覆，不要講課，不要加螢光筆，不要換成別的科目。',
       )
@@ -62,7 +66,7 @@ export function QuizScreen({
 
   function answer(text: string) {
     if (!current || !text.trim()) return
-    const correct = grade(current, text)
+    const correct = scoreAnswer(current, text)
     setCorrectCount((value) => value + (correct ? 1 : 0))
     setReview(`${correct ? '這題答對了。' : '這題再看一次。'}${current.explain}`)
     setDraft('')
@@ -81,18 +85,11 @@ export function QuizScreen({
   }
 
   return (
-    <IpadFrame
-      section="quiz"
-      onSection={(id) => {
-        if (id === 'settings') onSettings()
-        else if (id === 'class') onClose()
-      }}
-    >
+    <ShellPage onBack={onClose} title="測驗">
       <section className="quiz-board">
         {phase === 'setup' && (
           <div className="quiz-sheet">
             <p className="quiz-kicker">另一面白板</p>
-            <h1>測驗</h1>
             <p>題目跟上課的白板分開。答完之後，檢討寫在這一面。</p>
             <div className="segmented" role="group" aria-label="難易度">
               {([
@@ -109,26 +106,37 @@ export function QuizScreen({
               題數 {count}
               <input type="range" min={1} max={8} value={count} onChange={(event) => setCount(Number(event.target.value))} />
             </label>
-            <button type="button" className="primary" onClick={() => void begin()} disabled={busy}>
+            <button type="button" className="os-primary" onClick={() => void begin()} disabled={busy}>
               {busy ? '出題中' : '開始作答'}
             </button>
           </div>
         )}
         {phase === 'empty' && (
           <div className="quiz-sheet">
-            <h1>這次沒有題目</h1>
+            <h2>這次沒有題目</h2>
             <p>{emptyText}</p>
-            <button type="button" className="primary" onClick={onClose}>返回</button>
+            {!isConnected(loadSettings()) && (
+              <button type="button" className="os-primary" onClick={onSettings}>
+                前往模型
+              </button>
+            )}
+            <button type="button" onClick={onClose}>
+              返回
+            </button>
           </div>
         )}
         {phase === 'ask' && current && (
           <div className="quiz-sheet">
-            <p className="quiz-kicker">第 {index + 1} / {queue.length} 題</p>
-            <h1>{current.prompt}</h1>
+            <p className="quiz-kicker">
+              第 {index + 1} / {queue.length} 題
+            </p>
+            <h2>{current.prompt}</h2>
             {current.kind === 'choice' ? (
               <div className="quiz-choices">
                 {current.choices?.map((choice) => (
-                  <button key={choice} type="button" onClick={() => answer(choice)}>{choice}</button>
+                  <button key={choice} type="button" onClick={() => answer(choice)}>
+                    {choice}
+                  </button>
                 ))}
               </div>
             ) : (
@@ -140,7 +148,9 @@ export function QuizScreen({
                 }}
               >
                 <input value={draft} placeholder="寫下答案" onChange={(event) => setDraft(event.target.value)} />
-                <button type="submit" className="primary">送出</button>
+                <button type="submit" className="os-primary">
+                  送出
+                </button>
               </form>
             )}
           </div>
@@ -148,9 +158,9 @@ export function QuizScreen({
         {phase === 'review' && current && (
           <div className="quiz-sheet">
             <p className="quiz-kicker">檢討</p>
-            <h1>{current.prompt}</h1>
+            <h2>{current.prompt}</h2>
             <p className="review-line">{review}</p>
-            <button type="button" className="primary" onClick={nextQuestion}>
+            <button type="button" className="os-primary" onClick={nextQuestion}>
               {index + 1 >= queue.length ? '看結果' : '下一題'}
             </button>
           </div>
@@ -158,12 +168,16 @@ export function QuizScreen({
         {phase === 'done' && (
           <div className="quiz-sheet">
             <p className="quiz-kicker">結果</p>
-            <h1>{correctCount} / {queue.length}</h1>
+            <h2>
+              {correctCount} / {queue.length}
+            </h2>
             <p>檢討留在這一面，沒有寫回上課的白板。</p>
-            <button type="button" className="primary" onClick={onClose}>返回</button>
+            <button type="button" className="os-primary" onClick={onClose}>
+              返回
+            </button>
           </div>
         )}
       </section>
-    </IpadFrame>
+    </ShellPage>
   )
 }

@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { readUploads } from './files'
+import { gradeLabel, gradeOptions, loadGrade, saveGrade, type GradeId } from './profile'
 import {
   baseFor,
   isConnected,
@@ -13,159 +14,174 @@ import {
   type ProviderId,
 } from './settings'
 
-export function IpadFrame({
-  section,
-  onSection,
-  children,
-}: {
-  section: 'class' | 'quiz' | 'settings'
-  onSection: (id: 'class' | 'quiz' | 'settings') => void
-  children: ReactNode
-}) {
-  const items = [
-    ['class', '上課'],
-    ['quiz', '測驗'],
-    ['settings', '模型'],
-  ] as const
+function AppTopBar({ children, onBack }: { children?: ReactNode; onBack?: () => void }) {
   return (
-    <div className="ipad-app">
-      <nav className="ipad-side" aria-label="主選單">
-        <p className="ipad-mark">AI 智慧教學</p>
-        {items.map(([id, label]) => (
-          <button key={id} type="button" aria-current={section === id ? 'page' : undefined} onClick={() => onSection(id)}>
-            {label}
+    <header className="os-topbar">
+      <div className="os-topbar-start">
+        {onBack ? (
+          <button type="button" className="os-back" onClick={onBack}>
+            返回
           </button>
-        ))}
-      </nav>
-      <div className="ipad-main">{children}</div>
+        ) : (
+          <span className="os-brand">AI 智慧教學</span>
+        )}
+      </div>
+      <div className="os-topbar-end">{children}</div>
+    </header>
+  )
+}
+
+function GradeMenu({ grade, onChange }: { grade: GradeId; onChange: (id: GradeId) => void }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="os-menu-wrap">
+      <button type="button" className="os-pill" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
+        {gradeLabel(grade)}
+      </button>
+      {open && (
+        <ul className="os-menu" role="listbox">
+          {gradeOptions.map((item) => (
+            <li key={item.id}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={grade === item.id}
+                onClick={() => {
+                  onChange(item.id)
+                  saveGrade(item.id)
+                  setOpen(false)
+                }}
+              >
+                {item.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }
 
 export function HomeScreen({
-  title,
+  courseTitle,
   finished,
   stepLabel,
-  providerName,
-  model,
   connected,
-  sections,
   planning,
   planError,
   onEnter,
-  onPlan,
-  onQuiz,
+  onStart,
   onSettings,
 }: {
-  title: string
+  courseTitle: string
   finished: boolean
   stepLabel: string
-  providerName: string
-  model: string
   connected: boolean
-  sections: { id: string; title: string }[]
   planning: boolean
   planError: string
   onEnter: () => void
-  onPlan: (source: string, audience: string) => void
-  onQuiz: () => void
+  onStart: (topic: string, fileText: string) => void
   onSettings: () => void
 }) {
-  const [source, setSource] = useState('')
-  const [audience, setAudience] = useState('')
+  const [topic, setTopic] = useState('')
+  const [fileText, setFileText] = useState('')
   const [reading, setReading] = useState(false)
   const [fileNote, setFileNote] = useState('')
+  const [grade, setGrade] = useState<GradeId>(() => loadGrade())
+  const providerName = optionFor(loadSettings().provider).name
+  const canStart = topic.trim().length > 0 || fileText.trim().length > 0
+
   return (
-    <IpadFrame
-      section="class"
-      onSection={(id) => {
-        if (id === 'quiz') onQuiz()
-        if (id === 'settings') onSettings()
-      }}
-    >
-      <header className="ipad-title">
-        <p>{connected ? `${providerName} · ${model}` : '還沒接上模型'}</p>
-        <h1>{title || '新的一課'}</h1>
-      </header>
-      <div className="home-grid">
-        <article className="glass-card hero">
-          <h2>{title ? (finished ? '這堂已經講完' : '備好了') : '先把教材交給老師'}</h2>
-          <p className="fine">{stepLabel}</p>
-          {title && (
-            <button type="button" className="primary" onClick={onEnter}>
-              {finished ? '打開白板' : '開始上課'}
+    <div className="os-home">
+      <AppTopBar>
+        <GradeMenu grade={grade} onChange={setGrade} />
+        <button type="button" className="os-pill" onClick={onSettings}>
+          模型{connected ? ` · ${providerName}` : ''}
+        </button>
+      </AppTopBar>
+
+      <div className="os-home-body">
+        <aside className="os-lessons" aria-label="已上過的課">
+          <h2>我的課</h2>
+          {courseTitle ? (
+            <button type="button" className="os-lesson current" onClick={onEnter}>
+              <span className="os-lesson-title">{courseTitle}</span>
+              <span className="os-lesson-meta">{stepLabel}</span>
+              <span className="os-lesson-cta">{finished ? '打開白板' : '繼續上課'}</span>
             </button>
+          ) : (
+            <p className="os-empty">上過的課會留在這裡，點一下就能回到白板。</p>
           )}
-        </article>
-        <article className="glass-card">
-          <h2>測驗</h2>
-          <p>另一面白板。題目由模型依照這堂課的教材出，檢討不寫回上課的板。</p>
-          <button type="button" onClick={onQuiz} disabled={!title}>出題</button>
-        </article>
-        <article className="glass-card wide">
-          <h2>{title ? '換一份教材' : '備課'}</h2>
-          <label className="upload">
-            {reading ? '正在讀檔案' : '上傳檔案'}
+        </aside>
+
+        <section className="os-start">
+          <p className="os-kicker">想學什麼，直接告訴老師</p>
+          <label className="os-topic-field">
+            <span className="visually-hidden">想學的主題</span>
             <input
-              type="file"
-              accept=".pdf,.docx,.pptx,.txt,.md,application/pdf,text/plain"
-              multiple
-              disabled={reading || planning}
-              onChange={(event) => {
-                const list = [...(event.target.files ?? [])]
-                event.target.value = ''
-                if (!list.length) return
-                setReading(true)
-                setFileNote('')
-                void readUploads(list)
-                  .then((text) => {
-                    setSource((current) => (current.trim() ? `${current.trim()}\n\n${text}` : text))
-                    setFileNote(list.map((file) => file.name).join('、'))
-                  })
-                  .catch((error: unknown) => {
-                    setFileNote(error instanceof Error ? error.message : '這個檔案沒讀成')
-                  })
-                  .finally(() => setReading(false))
+              className="os-topic-input"
+              value={topic}
+              placeholder="教我二元一次方程式"
+              disabled={planning}
+              onChange={(event) => setTopic(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && canStart && !planning && connected) onStart(topic.trim(), fileText.trim())
               }}
             />
           </label>
-          {fileNote && <p className="fine">{fileNote}</p>}
-          <label className="field">
-            教材或主題
-            <textarea
-              value={source}
-              placeholder="貼上講義、上傳 PDF／Word／PowerPoint，或寫下要學的主題"
-              onChange={(event) => setSource(event.target.value)}
-            />
-          </label>
-          <label className="field">
-            教學對象，可以不填
-            <input value={audience} placeholder="例如高一、自學" onChange={(event) => setAudience(event.target.value)} />
-          </label>
-          {planError && <p className="fine">{planError}</p>}
-          <button type="button" className="primary" disabled={planning || !source.trim()} onClick={() => onPlan(source.trim(), audience)}>
-            {planning ? '備課中' : connected ? '讓模型備課' : '先接上模型才能備課'}
-          </button>
-          {!connected && (
-            <button type="button" onClick={onSettings}>前往模型</button>
-          )}
-        </article>
-        {sections.length > 0 && (
-          <article className="glass-card wide">
-            <h2>這堂課的教材</h2>
-            <ol>
-              {sections.map((section) => (
-                <li key={section.id}>{section.title}</li>
-              ))}
-            </ol>
-          </article>
-        )}
+
+          <div className="os-start-actions">
+            <button
+              type="button"
+              className="os-primary"
+              disabled={planning || !canStart}
+              onClick={() => {
+                if (!connected) {
+                  onSettings()
+                  return
+                }
+                onStart(topic.trim(), fileText.trim())
+              }}
+            >
+              {planning ? '備課中…' : connected ? '開始上課' : '先接上模型'}
+            </button>
+
+            <label className="os-file">
+              {reading ? '正在讀檔案…' : '改用我的檔案'}
+              <input
+                type="file"
+                accept=".pdf,.docx,.pptx,.txt,.md,application/pdf,text/plain"
+                multiple
+                disabled={reading || planning}
+                onChange={(event) => {
+                  const list = [...(event.target.files ?? [])]
+                  event.target.value = ''
+                  if (!list.length) return
+                  setReading(true)
+                  setFileNote('')
+                  void readUploads(list)
+                    .then((text) => {
+                      setFileText((current) => (current.trim() ? `${current.trim()}\n\n${text}` : text))
+                      setFileNote(list.map((file) => file.name).join('、'))
+                    })
+                    .catch((error: unknown) => {
+                      setFileNote(error instanceof Error ? error.message : '這個檔案沒讀成')
+                    })
+                    .finally(() => setReading(false))
+                }}
+              />
+            </label>
+          </div>
+
+          {fileNote && <p className="os-note">已讀入 {fileNote}</p>}
+          {planError && <p className="os-error">{planError}</p>}
+        </section>
       </div>
-    </IpadFrame>
+    </div>
   )
 }
 
-export function SettingsScreen({ onBack, onQuiz }: { onBack: () => void; onQuiz: () => void }) {
+export function SettingsScreen({ onBack }: { onBack: () => void }) {
   const [settings, setSettings] = useState<AiSettings>(() => loadSettings())
   const [saved, setSaved] = useState(false)
   const current = optionFor(settings.provider)
@@ -181,20 +197,12 @@ export function SettingsScreen({ onBack, onQuiz }: { onBack: () => void; onQuiz:
   }
 
   return (
-    <IpadFrame
-      section="settings"
-      onSection={(id) => {
-        if (id === 'class') onBack()
-        if (id === 'quiz') onQuiz()
-      }}
-    >
-      <header className="ipad-title">
-        <p>設定</p>
-        <h1>模型</h1>
-      </header>
-      <section className="glass-card settings-card">
-        <p className="fine">金鑰只留在這台裝置。局域網服務填位址即可，金鑰可以空著。Grok 會一直留在名單裡。</p>
-        <div className="provider-list">
+    <div className="os-page">
+      <AppTopBar onBack={onBack} />
+      <div className="os-page-body">
+        <h1 className="os-page-title">模型</h1>
+        <p className="os-muted">目前年級：{gradeLabel()}。在首頁右上角可改。金鑰只留在這台裝置。Grok 會一直留在名單裡。</p>
+        <div className="provider-list os-providers">
           {providerOptions.map((option) => (
             <label key={option.id} className={option.id === settings.provider ? 'provider selected' : 'provider'}>
               <input
@@ -210,7 +218,7 @@ export function SettingsScreen({ onBack, onQuiz }: { onBack: () => void; onQuiz:
             </label>
           ))}
         </div>
-        <p className="fine">{current.hint}</p>
+        <p className="os-muted">{current.hint}</p>
         {current.local && (
           <label className="field">
             服務位址
@@ -254,7 +262,7 @@ export function SettingsScreen({ onBack, onQuiz }: { onBack: () => void; onQuiz:
         </label>
         <button
           type="button"
-          className="primary"
+          className="os-primary"
           onClick={() => {
             saveSettings(settings)
             setSaved(true)
@@ -262,8 +270,25 @@ export function SettingsScreen({ onBack, onQuiz }: { onBack: () => void; onQuiz:
         >
           儲存
         </button>
-        {saved && <p className="fine">已儲存。現在用 {current.name}{isConnected(settings) ? '，已可呼叫。' : '，還沒接上。'}</p>}
-      </section>
-    </IpadFrame>
+        {saved && (
+          <p className="os-muted">
+            已儲存。現在用 {current.name}
+            {isConnected(settings) ? '，已可呼叫。' : '，還沒接上。'}
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export function ShellPage({ onBack, title, children }: { onBack: () => void; title: string; children: ReactNode }) {
+  return (
+    <div className="os-page">
+      <AppTopBar onBack={onBack} />
+      <div className="os-page-body">
+        <h1 className="os-page-title">{title}</h1>
+        {children}
+      </div>
+    </div>
   )
 }

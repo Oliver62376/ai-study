@@ -6,7 +6,8 @@ import { loadState, reduce, saveState, type State } from './model'
 import { boardPdf, captureSheet, sharePdf } from './pdf'
 import { anchorsOf, boardToolPrompt, parseCourse, parseTeacherTurn, planPrompt } from './prompt'
 import { QuizScreen } from './quiz'
-import { askProvider, isConnected, loadSettings, modelFor, optionFor } from './settings'
+import { askProvider, isConnected, loadSettings } from './settings'
+import { gradeLabel } from './profile'
 import { HomeScreen, SettingsScreen } from './shell'
 import { listen, speak } from './speech'
 
@@ -123,7 +124,7 @@ export default function App() {
         settings,
         `學生剛打斷你。只依這份教材回答，然後說要回到課程進度。需要時用螢光筆標出你指的位置。\n學生說：${outline}`,
         courseNow.sections.map((section) => `${section.title}\n${section.body}`).join('\n\n'),
-        boardToolPrompt(courseNow.title, anchors),
+        boardToolPrompt(courseNow.title, anchors, courseNow.audience || gradeLabel()),
       )
         .then((spoken) => {
           if (closed || !spoken) return
@@ -209,7 +210,12 @@ export default function App() {
             ...state.course.sections.map((section) => `${section.title}\n${section.body}`),
             state.caption,
           ].join('\n')
-          const raw = await askProvider(settings, text, context, boardToolPrompt(state.course.title, anchorsOf(state.reveals)))
+          const raw = await askProvider(
+            settings,
+            text,
+            context,
+            boardToolPrompt(state.course.title, anchorsOf(state.reveals), state.course.audience || gradeLabel()),
+          )
           if (raw) {
             const turn = parseTeacherTurn(raw, '')
             say = turn.say
@@ -287,7 +293,21 @@ export default function App() {
   const stepTotal = state.course?.steps.length ?? 0
   const progress = !stepTotal ? '尚未備課' : state.finished ? '講完' : `第 ${Math.min(state.stepIndex + 1, stepTotal)} / ${stepTotal} 段`
 
-  async function onPlan(source: string, audience: string) {
+  function buildPlanSource(topic: string, fileText: string) {
+    const t = topic.trim()
+    const f = fileText.trim()
+    if (f && t) return `學生想學：${t}\n\n教材：\n${f}`
+    if (f) return f
+    return t
+  }
+
+  async function onPlan(topic: string, fileText: string) {
+    const source = buildPlanSource(topic, fileText)
+    if (!source) {
+      setPlanError('先輸入主題，或上傳檔案。')
+      return
+    }
+    const audience = gradeLabel()
     const settings = loadSettings()
     if (!isConnected(settings)) {
       setPlanError('先到模型接上 API。')
@@ -335,31 +355,36 @@ export default function App() {
   if (screen === 'home') {
     return (
       <HomeScreen
-        title={state.course?.title ?? ''}
+        courseTitle={state.course?.title ?? ''}
         finished={state.finished}
-        stepLabel={state.course ? (state.finished ? '這一堂已經講完' : state.reveals.length ? `寫到第 ${writtenPage + 1} 頁` : '備好了，還沒開始講') : '貼上教材或主題，由模型備課'}
-        providerName={optionFor(loadSettings().provider).name}
-        model={modelFor(loadSettings())}
+        stepLabel={
+          state.course
+            ? state.finished
+              ? '這一堂已經講完'
+              : state.reveals.length
+                ? `寫到第 ${writtenPage + 1} 頁`
+                : '備好了，還沒開始講'
+            : ''
+        }
         connected={isConnected(loadSettings())}
-        sections={state.course?.sections ?? []}
         planning={planning}
         planError={planError}
         onEnter={enterClass}
-        onPlan={(source, audience) => void onPlan(source, audience)}
-        onQuiz={() => openQuiz('home')}
+        onStart={(topic, fileText) => void onPlan(topic, fileText)}
         onSettings={() => setScreen('settings')}
       />
     )
   }
 
   if (screen === 'settings') {
-    return <SettingsScreen onBack={() => setScreen('home')} onQuiz={() => openQuiz('home')} />
+    return <SettingsScreen onBack={() => setScreen('home')} />
   }
 
   if (screen === 'quiz') {
     return (
       <QuizScreen
         materialText={state.course?.sections.map((section) => `${section.title}\n${section.body}`).join('\n\n') ?? ''}
+        audience={state.course?.audience ?? gradeLabel()}
         onClose={() => setScreen(quizBack.current)}
         onSettings={() => setScreen('settings')}
       />

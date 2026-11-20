@@ -1,6 +1,6 @@
 # PROGRESS
 
-最後更新：2026-11-19（首頁可上傳 PDF／Word／PowerPoint／文字檔，IPA 卡在 GitHub 登入）
+最後更新：2026-11-20（使用者不要我改首頁。首頁與 iPadOS 外殼改由另一個 AI 做，做完再交回來接上。IPA 已打出，見下方第 10 項。）
 
 這份文件給下一個 AI Agent 交接用。開始新任務前先讀這裡，再讀 `docs/AI智慧教學工具-需求.md`。完成任務後更新本檔：補上這次做了什麼，保留仍然有效的舊紀錄，不要整份覆蓋成只剩最後一次操作。
 
@@ -12,7 +12,7 @@
 
 2026-11-19 晚 `npx tsc --noEmit` 與 `npm run build` 通過。開發伺服器是 `npm run dev`，在 `http://localhost:5173/`。手動路徑可加 `?fast=1`（縮短語音與板書間隔）與 `?fresh=1`（清掉 `ai-study-course-v1` 再開始）。沒有自動測試。瀏覽器已確認上傳 PDF、docx、pptx 會把文字填進備課框。
 
-課堂一次只顯示一頁，右下角翻頁。字幕是目前這一句。回放從第一次發問才錄。全螢幕藏教材。白板固定白紙，換色已拿掉。螢光筆給老師和學生用，可以擦掉或清掉這一頁。測驗是另一面白板。PDF 改成等畫完再截畫面上的那一頁。首頁是 iPad 側欄。
+課堂一次只顯示一頁，右下角翻頁。字幕是目前這一句。回放從第一次發問才錄。全螢幕藏教材。白板固定白紙，換色已拿掉。螢光筆給老師和學生用，可以擦掉或清掉這一頁。測驗是另一面白板。PDF 改成等畫完再截畫面上的那一頁。現在的首頁仍是左側三顆按鈕加卡片，使用者不要這版。2026-11-20 使用者要求把首頁與 iPadOS 外殼的提示詞交給另一個 AI，做完再交回這個專案接上。年級預設國中二年級，主題開課例如「教我二元一次方程式」。在那份結果回來之前，不要改 `src/shell.tsx` 的首頁。
 
 ## 已完成
 
@@ -53,7 +53,7 @@
 7. PDF 裡的文字與公式是頁面截圖，不是可選取的文字。
 8. 螢光筆筆跡沒有跨次上課保存。重載就沒有。換色功能已依要求刪除，不要再加回去。
 9. `?fresh=1` 清的是 `ai-study-course-v1`。
-10. GitHub 登入與 IPA。使用者已要求打包。workflow 在 `.github/workflows/ios-ipa.yml`，還沒跑成功。本機不是 git repo，也沒有 GitHub 登入，沒有 `user.name`／`user.email`。不要改 git config。登入完成後才能 commit、push、跑 Actions，產物名稱 `AI-Study-ipad`。未簽名 IPA 要用 Sideloadly 加使用者的 Apple ID 安裝。
+10. GitHub 登入與 IPA。已登入 Oliver62376，私人倉庫 https://github.com/Oliver62376/ai-study 。`main` 已 push。Actions run `44547374666` 成功，產物 `AI-Study-ipad`。本機已下載到 `C:\Users\boboy\Downloads\AI-Study-ipad.ipa`。這份沒有簽章，要用 Sideloadly 加使用者的 Apple ID 安裝，不能直接點開。不要改 git config。這段進度更新還在本機，不要為了它再 push `main`，否則 workflow 會再打一次。
 11. 自動測試。瀏覽器手動看過翻頁、全螢幕、綠板、螢光筆、發問後才啟用回放。沒有把新的 PDF 下載去蓋掉使用者的 `C:\Users\boboy\Downloads\黑板-波的性質.pdf`。
 
 ## Bug 與已試過的處理
