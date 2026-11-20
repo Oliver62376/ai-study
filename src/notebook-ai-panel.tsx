@@ -13,6 +13,14 @@ import { askProvider, isConnected, loadSettings } from './settings'
 import type { VisionPage } from './ocr'
 import type { NotebookAiMode } from './notebook-ai'
 
+function IconCloseGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M8 8l8 8M16 8l-8 8" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 const modePrompts: Record<NotebookAiMode, string> = {
   explain: '你是家教。看這頁筆記（含手寫），解釋重點與推論步驟。缺字處合理補齊但不要瞎編。',
   summarize: '整理這頁筆記成條列重點（5 點內），適合考前複習。',
@@ -139,9 +147,9 @@ export function NotebookAiPanel({
         onPointerUp={onHeaderPointerUp}
         onPointerCancel={onHeaderPointerUp}
       >
-        <span className="nb-ai-float-title">筆記 AI（可拖曳）</span>
-        <button type="button" className="nb-ai-float-x" aria-label="關閉" onClick={onClose}>
-          ×
+        <span className="nb-ai-float-title">筆記 AI</span>
+        <button type="button" className="nb-ai-close" aria-label="關閉" onClick={onClose}>
+          <IconCloseGlyph />
         </button>
       </div>
       <AiModeBar mode={mode} onMode={setMode} onQuick={(_label, text) => void send(text)} />

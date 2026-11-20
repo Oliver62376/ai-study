@@ -9,7 +9,7 @@ import { NotebookToolbar } from './notebook-toolbar'
 import { boardPdf, sharePdf } from './pdf'
 
 GlobalWorkerOptions.workerSrc = workerUrl
-import { IconBack, IconBtn, IconSave } from './icons'
+import { IconBack, IconBtn, IconShare, IconSettings } from './icons'
 import { NotebookCanvas, templateLabel, type EraserMode, type NbTool, type ShapeKind } from './notebook-canvas'
 import { NotebookAiPanel } from './notebook-ai-panel'
 import { NotebookPageManager } from './notebook-page-manager'
@@ -59,6 +59,7 @@ export function NotebookScreen({
   const [redoStack, setRedoStack] = useState<ReturnType<typeof snapshotPage>[]>([])
   const [aiPanelOpen, setAiPanelOpen] = useState(false)
   const [aiPreview, setAiPreview] = useState<string | null>(null)
+  const [railOpen, setRailOpen] = useState(false)
   const [pageMgrOpen, setPageMgrOpen] = useState(false)
   const [savingExit, setSavingExit] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -247,12 +248,6 @@ export function NotebookScreen({
     }
   }
 
-  async function persistPage() {
-    if (!book || !page) return
-    const preview = await capturePreview()
-    patchPage({ preview })
-  }
-
   async function importPdf(file: File) {
     if (!book) return
     setImporting(true)
@@ -332,13 +327,13 @@ export function NotebookScreen({
   const pageAiContext = [page.caption, ...page.texts.map((t) => t.text)].filter(Boolean).join('\n')
 
   return (
-    <div className="nb-app os-page">
-      <header className="os-topbar glass-bar">
+    <div className="nb-app nb-gn-app">
+      <header className="nb-gn-header">
         <IconBtn label={savingExit ? '儲存中' : '返回'} disabled={savingExit} onClick={() => void exitNotebook()}>
           <IconBack />
         </IconBtn>
         <input
-          className="nb-book-title"
+          className="nb-gn-title selectable"
           value={book.title}
           aria-label="筆記本名稱"
           onChange={(event) => {
@@ -347,34 +342,54 @@ export function NotebookScreen({
             setBooks(loadNotebooks())
           }}
         />
-        <div className="os-topbar-end">
-          <label className="nb-import-pdf">
-            {importing ? '匯入中' : '匯入 PDF'}
-            <input
-              type="file"
-              accept="application/pdf,.pdf"
-              disabled={importing || exporting}
-              onChange={(event) => {
-                const file = event.target.files?.[0]
-                event.target.value = ''
-                if (file) void importPdf(file)
-              }}
-            />
-          </label>
-          <button type="button" className="nb-plain-btn" disabled={exporting || importing} onClick={() => void exportPdfBook()}>
-            {exporting ? '匯出中' : '匯出 PDF'}
-          </button>
-          <IconBtn label="設定（觸控筆）" onClick={onSettings}>
-            <span className="nb-tool">設定</span>
-          </IconBtn>
-          <IconBtn label="儲存" onClick={() => void persistPage()}>
-            <IconSave />
-          </IconBtn>
-        </div>
+        <HeaderNotebookActions
+          importing={importing}
+          exporting={exporting}
+          onImport={(file) => void importPdf(file)}
+          onShare={() => void exportPdfBook()}
+          onPageMgr={() => setPageMgrOpen(true)}
+          onRail={() => setRailOpen((v) => !v)}
+          onSettings={onSettings}
+        />
       </header>
 
-      <div className="nb-body">
-        <aside className="nb-sidebar glass-rail">
+      <div className="nb-gn-stage">
+        <div className="nb-gn-toolbar-slot">
+          <NotebookToolbar
+            tool={tool}
+            color={color}
+            width={width}
+            shapeKind={shapeKind}
+            eraserMode={eraserMode}
+            eraserSize={eraserSize}
+            onTool={setTool}
+            onColor={setColor}
+            onWidth={setWidth}
+            onShapeKind={setShapeKind}
+            onEraserMode={setEraserMode}
+            onEraserSize={setEraserSize}
+            onUndo={undo}
+            onRedo={redo}
+            onInsertImage={async (file) => {
+              const dataUrl = await readImage(file)
+              patchPage({
+                stickers: [
+                  ...page.stickers,
+                  { id: newId('I'), x: 80, y: 120, w: 240, h: 180, dataUrl },
+                ],
+              })
+            }}
+            onAttach={() => {
+              void capturePreview().then((preview) => {
+                const bundle = pageToTeachingBundle({ ...page, preview }, book.title)
+                onAttach(bundle.text, bundle.imageDataUrl)
+              })
+            }}
+          />
+        </div>
+
+        <div className="nb-body nb-body-gn">
+        <aside className={`nb-sidebar nb-sidebar-drawer${railOpen ? ' open' : ''}`}>
           <label className="nb-select">
             筆記本
             <select value={bookId} onChange={(event) => setBookId(event.target.value)}>
@@ -460,38 +475,7 @@ export function NotebookScreen({
           </label>
         </aside>
 
-        <div className="nb-main no-select">
-          <NotebookToolbar
-            tool={tool}
-            color={color}
-            width={width}
-            shapeKind={shapeKind}
-            eraserMode={eraserMode}
-            eraserSize={eraserSize}
-            onTool={setTool}
-            onColor={setColor}
-            onWidth={setWidth}
-            onShapeKind={setShapeKind}
-            onEraserMode={setEraserMode}
-            onEraserSize={setEraserSize}
-            onUndo={undo}
-            onRedo={redo}
-            onInsertImage={async (file) => {
-              const dataUrl = await readImage(file)
-              patchPage({
-                stickers: [
-                  ...page.stickers,
-                  { id: newId('I'), x: 80, y: 120, w: 240, h: 180, dataUrl },
-                ],
-              })
-            }}
-            onAttach={() => {
-              void capturePreview().then((preview) => {
-                const bundle = pageToTeachingBundle({ ...page, preview }, book.title)
-                onAttach(bundle.text, bundle.imageDataUrl)
-              })
-            }}
-          />
+        <div className="nb-main nb-main-gn no-select">
           {pageNav === 'horizontal' && (
             <div className="nb-page-nav">
               <button
@@ -608,6 +592,7 @@ export function NotebookScreen({
                 )}
           </div>
         </div>
+        </div>
 
         {!aiPanelOpen && (
           <button type="button" className="nb-ai-fab" aria-label="開啟筆記 AI" onClick={() => setAiPanelOpen(true)}>
@@ -646,6 +631,54 @@ export function NotebookScreen({
           />
         )}
       </div>
+    </div>
+  )
+}
+
+function HeaderNotebookActions({
+  importing,
+  exporting,
+  onImport,
+  onShare,
+  onPageMgr,
+  onRail,
+  onSettings,
+}: {
+  importing: boolean
+  exporting: boolean
+  onImport: (file: File) => void
+  onShare: () => void
+  onPageMgr: () => void
+  onRail: () => void
+  onSettings: () => void
+}) {
+  return (
+    <div className="nb-gn-header-end">
+      <label className="nb-gn-icon-hit" title={importing ? '匯入中' : '匯入 PDF'}>
+        <span className="nb-gn-icon-label">PDF</span>
+        <input
+          type="file"
+          accept="application/pdf,.pdf"
+          disabled={importing || exporting}
+          onChange={(event) => {
+            const file = event.target.files?.[0]
+            event.target.value = ''
+            if (file) onImport(file)
+          }}
+        />
+      </label>
+      <IconBtn label={exporting ? '分享中' : '分享 PDF'} disabled={exporting || importing} onClick={onShare}>
+        <IconShare />
+      </IconBtn>
+      <button type="button" className="nb-gn-text-btn" onClick={onPageMgr}>
+        頁面
+      </button>
+      <button type="button" className="nb-gn-text-btn" onClick={onRail}>
+        側欄
+      </button>
+      <IconBtn label="設定" onClick={onSettings}>
+        <IconSettings />
+      </IconBtn>
     </div>
   )
 }

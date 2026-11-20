@@ -49,6 +49,7 @@ class PalmGuard {
 
     if (type === 'touch') {
       if (prefs.pencilOnly && drawingSurface) return true
+      if (!drawingSurface) return false
       if (!prefs.palmRejection) return false
       if (this.penDown.size > 0) return true
       if (Date.now() < this.touchBlockedUntil) return true

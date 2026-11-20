@@ -12,7 +12,7 @@ import type { InkPoint, InkStroke, NotePage, TextBox } from './notebook'
 import type { PageTemplate } from './stylus-prefs'
 
 export type NbTool = 'pen' | 'fountain' | 'highlighter' | 'eraser' | 'lasso' | 'shape' | 'text'
-export type ShapeKind = 'line' | 'rect' | 'ellipse'
+export type ShapeKind = 'line' | 'rect' | 'ellipse' | 'triangle' | 'arrow' | 'star'
 export type EraserMode = 'stroke' | 'pixel'
 
 const HIGHLIGHTER = '#ffe14a88'
@@ -93,24 +93,46 @@ export function NotebookCanvas({
   compact?: boolean
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
+  const svgRef = useRef<SVGSVGElement>(null)
   const drawing = useRef<InkPoint[]>([])
   const shapeStart = useRef<InkPoint | null>(null)
+  const inking = useRef(false)
+  const eraseWork = useRef<InkStroke[] | null>(null)
+  const draftRaf = useRef(0)
+  const draftLive = useRef<InkStroke | null>(null)
   const [draft, setDraft] = useState<InkStroke | null>(null)
   const [lassoDraft, setLassoDraft] = useState<InkPoint[]>([])
+  const [eraserRing, setEraserRing] = useState<InkPoint | null>(null)
 
   const templateClass = useMemo(() => `nb-template nb-${page.template}`, [page.template])
   const paperBg = page.paperColor ?? '#fbfaf7'
 
   const localPoint = useCallback((event: ReactPointerEvent<SVGElement | HTMLElement>) => {
-    const host = wrapRef.current?.querySelector('.nb-sheet') as HTMLElement | null
-    if (!host) return { x: 0, y: 0, p: event.pressure }
-    const bounds = host.getBoundingClientRect()
-    return {
-      x: event.clientX - bounds.left,
-      y: event.clientY - bounds.top,
-      p: globalPalmGuard.readingPressure(event as unknown as ReactPointerEvent<HTMLElement>),
-    }
+    const svg = svgRef.current
+    const pressure = globalPalmGuard.readingPressure(event as unknown as ReactPointerEvent<HTMLElement>)
+    if (!svg) return { x: 0, y: 0, p: pressure }
+    const ctm = svg.getScreenCTM()
+    if (!ctm) return { x: 0, y: 0, p: pressure }
+    const pt = svg.createSVGPoint()
+    pt.x = event.clientX
+    pt.y = event.clientY
+    const mapped = pt.matrixTransform(ctm.inverse())
+    return { x: mapped.x, y: mapped.y, p: pressure }
   }, [])
+
+  const scheduleDraft = useCallback(() => {
+    if (draftRaf.current) return
+    draftRaf.current = window.requestAnimationFrame(() => {
+      draftRaf.current = 0
+      if (draftLive.current) setDraft({ ...draftLive.current, points: [...draftLive.current.points] })
+    })
+  }, [])
+
+  const flushErase = useCallback(() => {
+    if (!eraseWork.current) return
+    onChange({ strokes: eraseWork.current })
+    eraseWork.current = null
+  }, [onChange])
 
   useEffect(() => {
     const onShortcut = (event: Event) => {
@@ -121,10 +143,6 @@ export function NotebookCanvas({
     window.addEventListener('study-stylus', onShortcut)
     return () => window.removeEventListener('study-stylus', onShortcut)
   }, [])
-
-  function inkMode() {
-    return tool !== 'text'
-  }
 
   function commitStroke(stroke: InkStroke) {
     onChange({ strokes: [...page.strokes, stroke] })
@@ -139,10 +157,9 @@ export function NotebookCanvas({
 
   function erasePixelAt(x: number, y: number) {
     const radius = eraserSize
-    const strokes = page.strokes.flatMap((stroke) => splitStrokeByErase(stroke, x, y, radius))
-    if (strokes.length !== page.strokes.length || strokes.some((s, i) => s !== page.strokes[i])) {
-      onChange({ strokes })
-    }
+    const base = eraseWork.current ?? page.strokes
+    const strokes = base.flatMap((stroke) => splitStrokeByErase(stroke, x, y, radius))
+    eraseWork.current = strokes
   }
 
   function finishLasso(points: InkPoint[]) {
@@ -157,8 +174,9 @@ export function NotebookCanvas({
   }
 
   function onPointerDown(event: ReactPointerEvent<SVGSVGElement>) {
+    if (event.pointerType === 'touch') return
     const pointer = event as unknown as ReactPointerEvent<HTMLElement>
-    if (globalPalmGuard.shouldIgnore(pointer, inkMode())) return
+    if (globalPalmGuard.shouldIgnore(pointer, inking.current)) return
     if (isPencilEraserEnd(pointer) && onPencilShortcut) {
       event.preventDefault()
       onPencilShortcut('eraser')
@@ -169,15 +187,26 @@ export function NotebookCanvas({
     }
     const pt = localPoint(event)
     if (tool === 'eraser') {
-      if (eraserMode === 'pixel') erasePixelAt(pt.x, pt.y)
-      else eraseStrokeAt(pt.x, pt.y)
+      inking.current = true
+      eraseWork.current = page.strokes
+      if (eraserMode === 'pixel') {
+        erasePixelAt(pt.x, pt.y)
+        setEraserRing(pt)
+      } else eraseStrokeAt(pt.x, pt.y)
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId)
+      } catch {
+        /* ignore */
+      }
       return
     }
     if (tool === 'lasso') {
+      inking.current = true
       setLassoDraft([pt])
       return
     }
     if (tool === 'shape') {
+      inking.current = true
       shapeStart.current = pt
       setDraft({
         id: 'draft',
@@ -208,23 +237,28 @@ export function NotebookCanvas({
     } catch {
       /* ignore */
     }
+    inking.current = true
     drawing.current = [pt]
-    setDraft({
+    draftLive.current = {
       id: 'draft',
       tool: tool === 'highlighter' ? 'highlighter' : tool === 'fountain' ? 'fountain' : 'pen',
       color: tool === 'highlighter' ? HIGHLIGHTER : color,
       width: widthFor(tool, baseWidth, pt.p ?? 0.5, loadStylusPreferences().pressure),
       points: drawing.current,
-    })
+    }
+    setDraft(draftLive.current)
   }
 
   function onPointerMove(event: ReactPointerEvent<SVGSVGElement>) {
+    if (event.pointerType === 'touch') return
     const pointer = event as unknown as ReactPointerEvent<HTMLElement>
-    if (globalPalmGuard.shouldIgnore(pointer, inkMode() && drawing.current.length > 0)) return
+    if (globalPalmGuard.shouldIgnore(pointer, inking.current)) return
     const pt = localPoint(event)
     if (tool === 'eraser') {
-      if (eraserMode === 'pixel') erasePixelAt(pt.x, pt.y)
-      else eraseStrokeAt(pt.x, pt.y)
+      if (eraserMode === 'pixel') {
+        erasePixelAt(pt.x, pt.y)
+        setEraserRing(pt)
+      } else eraseStrokeAt(pt.x, pt.y)
       return
     }
     if (tool === 'lasso' && lassoDraft.length) {
@@ -237,16 +271,23 @@ export function NotebookCanvas({
     }
     if (!drawing.current.length) return
     drawing.current.push(pt)
-    if (draft)
-      setDraft({
-        ...draft,
+    if (draftLive.current) {
+      draftLive.current = {
+        ...draftLive.current,
         width: widthFor(tool, baseWidth, pt.p ?? 0.5, loadStylusPreferences().pressure),
-        points: [...drawing.current],
-      })
+        points: drawing.current,
+      }
+      scheduleDraft()
+    }
   }
 
   function onPointerUp(event: ReactPointerEvent<SVGSVGElement>) {
     globalPalmGuard.shouldIgnore(event as unknown as ReactPointerEvent<HTMLElement>, false)
+    inking.current = false
+    if (tool === 'eraser' && eraserMode === 'pixel') {
+      flushErase()
+      setEraserRing(null)
+    }
     if (lassoDraft.length) {
       finishLasso(lassoDraft)
       return
@@ -257,10 +298,11 @@ export function NotebookCanvas({
       shapeStart.current = null
       return
     }
-    if (drawing.current.length > 1 && draft) {
-      commitStroke({ ...draft, id: `s${Date.now()}` })
+    if (drawing.current.length > 1 && draftLive.current) {
+      commitStroke({ ...draftLive.current, id: `s${Date.now()}` })
     }
     drawing.current = []
+    draftLive.current = null
     setDraft(null)
   }
 
@@ -293,6 +335,32 @@ export function NotebookCanvas({
           strokeWidth={stroke.width}
         />
       )
+    if (stroke.shape === 'triangle') {
+      const cx = (a.x + b.x) / 2
+      const top = Math.min(a.y, b.y)
+      const bottom = Math.max(a.y, b.y)
+      const left = Math.min(a.x, b.x)
+      const right = Math.max(a.x, b.x)
+      const points = `${cx},${top} ${right},${bottom} ${left},${bottom}`
+      return <polygon key={stroke.id} points={points} fill="none" stroke={stroke.color} strokeWidth={stroke.width} />
+    }
+    if (stroke.shape === 'arrow')
+      return (
+        <g key={stroke.id} stroke={stroke.color} strokeWidth={stroke.width} fill="none" strokeLinecap="round" strokeLinejoin="round">
+          <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} />
+          <polygon
+            points={arrowHead(a.x, a.y, b.x, b.y, stroke.width)}
+            fill={stroke.color}
+            stroke="none"
+          />
+        </g>
+      )
+    if (stroke.shape === 'star') {
+      const cx = (a.x + b.x) / 2
+      const cy = (a.y + b.y) / 2
+      const outer = Math.hypot(b.x - a.x, b.y - a.y) / 2
+      return <polygon key={stroke.id} points={starPoints(cx, cy, outer, outer * 0.42)} fill="none" stroke={stroke.color} strokeWidth={stroke.width} />
+    }
     return (
       <ellipse
         key={stroke.id}
@@ -306,6 +374,8 @@ export function NotebookCanvas({
       />
     )
   }
+
+  const strokeSource = eraseWork.current ?? page.strokes
 
   return (
     <div className={`nb-canvas-wrap${compact ? ' nb-canvas-compact' : ''}`} ref={wrapRef}>
@@ -335,7 +405,8 @@ export function NotebookCanvas({
             />
           ))}
           <svg
-            className="nb-ink apple-pencil-surface"
+            ref={svgRef}
+            className="nb-ink nb-ink-surface"
             viewBox="0 0 820 1060"
             preserveAspectRatio="xMidYMid meet"
             onPointerDown={onPointerDown}
@@ -343,7 +414,7 @@ export function NotebookCanvas({
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
           >
-            {page.strokes.map((stroke) =>
+            {strokeSource.map((stroke) =>
               stroke.tool === 'shape' ? (
                 renderShape(stroke)
               ) : (
@@ -359,7 +430,7 @@ export function NotebookCanvas({
                 />
               ),
             )}
-            {page.strokes.map((stroke) =>
+            {strokeSource.map((stroke) =>
               lassoIds.has(stroke.id) ? (
                 stroke.tool === 'shape' ? (
                   <g key={`sel-${stroke.id}`} pointerEvents="none">
@@ -404,6 +475,17 @@ export function NotebookCanvas({
                 strokeDasharray="6 4"
               />
             )}
+            {eraserRing && tool === 'eraser' && eraserMode === 'pixel' && (
+              <circle
+                cx={eraserRing.x}
+                cy={eraserRing.y}
+                r={eraserSize}
+                fill="rgba(0,0,0,0.04)"
+                stroke="rgba(60,60,67,0.45)"
+                strokeWidth={1.5}
+                pointerEvents="none"
+              />
+            )}
           </svg>
         </div>
       </div>
@@ -413,4 +495,24 @@ export function NotebookCanvas({
 
 export function templateLabel(t: PageTemplate) {
   return t === 'blank' ? '空白' : t === 'ruled' ? '橫線' : t === 'grid' ? '方格' : '點線'
+}
+
+function arrowHead(x1: number, y1: number, x2: number, y2: number, width: number) {
+  const angle = Math.atan2(y2 - y1, x2 - x1)
+  const size = Math.max(10, width * 4)
+  const x3 = x2 - size * Math.cos(angle - Math.PI / 7)
+  const y3 = y2 - size * Math.sin(angle - Math.PI / 7)
+  const x4 = x2 - size * Math.cos(angle + Math.PI / 7)
+  const y4 = y2 - size * Math.sin(angle + Math.PI / 7)
+  return `${x2},${y2} ${x3},${y3} ${x4},${y4}`
+}
+
+function starPoints(cx: number, cy: number, outer: number, inner: number) {
+  const pts: string[] = []
+  for (let i = 0; i < 10; i += 1) {
+    const angle = -Math.PI / 2 + (i * Math.PI) / 5
+    const radius = i % 2 === 0 ? outer : inner
+    pts.push(`${cx + Math.cos(angle) * radius},${cy + Math.sin(angle) * radius}`)
+  }
+  return pts.join(' ')
 }

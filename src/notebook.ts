@@ -12,7 +12,7 @@ export interface InkStroke {
   color: string
   width: number
   points: InkPoint[]
-  shape?: 'line' | 'rect' | 'ellipse'
+  shape?: 'line' | 'rect' | 'ellipse' | 'triangle' | 'arrow' | 'star'
 }
 
 export interface TextBox {

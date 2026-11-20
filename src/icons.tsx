@@ -186,6 +186,23 @@ export function IconRefresh() {
   )
 }
 
+export function IconShare() {
+  return (
+    <Svg>
+      <path d="M8 11.5V7.2A2.2 2.2 0 0 1 10.2 5h7.6A2.2 2.2 0 0 1 20 7.2v9.6A2.2 2.2 0 0 1 17.8 19H10.2A2.2 2.2 0 0 1 8 16.8V12.5" strokeLinecap="round" />
+      <path d="M5 12h10M11 8l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  )
+}
+
+export function IconClose() {
+  return (
+    <Svg>
+      <path d="M8 8l8 8M16 8l-8 8" strokeLinecap="round" />
+    </Svg>
+  )
+}
+
 export function IconSave() {
   return (
     <Svg>
