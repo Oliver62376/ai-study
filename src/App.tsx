@@ -418,6 +418,8 @@ export default function App() {
     const boot = consumeNativeClassBoot()
     if (!boot) return
     visionRef.current = boot.vision ?? []
+    setScreen('class')
+    setPlanning(true)
     void onPlan(boot.topic, boot.fileText, visionRef.current)
   }, [])
 

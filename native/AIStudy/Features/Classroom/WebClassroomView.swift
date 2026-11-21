@@ -10,7 +10,7 @@ struct WebClassroomView: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             WebClassroomWebView(seedTopic: seedTopic, fileText: context)
-                .ignoresSafeArea(edges: .bottom)
+                .ignoresSafeArea()
 
             Button {
                 dismiss()
@@ -40,32 +40,36 @@ private struct WebClassroomWebView: UIViewRepresentable {
     let fileText: String
 
     func makeCoordinator() -> Coordinator {
-        Coordinator()
+        Coordinator(seedTopic: seedTopic, fileText: fileText)
     }
 
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
         config.defaultWebpagePreferences.allowsContentJavaScript = true
+        config.setURLSchemeHandler(WebAppSchemeHandler(), forURLScheme: "aistudy")
+
+        var bootstrap = WebLocalStorageBridge.injectionScript()
+        bootstrap += "\n"
+        bootstrap += WebLocalStorageBridge.bootScript(topic: seedTopic, fileText: fileText)
 
         let prefsScript = WKUserScript(
-            source: WebLocalStorageBridge.injectionScript(),
+            source: bootstrap,
             injectionTime: .atDocumentStart,
             forMainFrameOnly: true
         )
         config.userContentController.addUserScript(prefsScript)
 
         let webView = WKWebView(frame: .zero, configuration: config)
-        webView.isOpaque = false
-        webView.backgroundColor = .clear
+        webView.isOpaque = true
+        webView.backgroundColor = .systemBackground
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.navigationDelegate = context.coordinator
-        context.coordinator.webView = webView
-        context.coordinator.pendingBoot = (seedTopic, fileText)
 
-        if let index = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "WebApp") {
-            let folder = index.deletingLastPathComponent()
-            webView.loadFileURL(index, allowingReadAccessTo: folder)
+        if Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "WebApp") != nil {
+            if let start = URL(string: "aistudy://app/index.html") {
+                webView.load(URLRequest(url: start))
+            }
         } else {
             webView.loadHTMLString(missingBundleHTML, baseURL: nil)
         }
@@ -76,18 +80,28 @@ private struct WebClassroomWebView: UIViewRepresentable {
     func updateUIView(_ webView: WKWebView, context: Context) {}
 
     final class Coordinator: NSObject, WKNavigationDelegate {
-        var webView: WKWebView?
-        var pendingBoot: (String, String)?
+        let seedTopic: String
+        let fileText: String
+
+        init(seedTopic: String, fileText: String) {
+            self.seedTopic = seedTopic
+            self.fileText = fileText
+        }
+
+        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            NSLog("Web classroom navigation error: \(error.localizedDescription)")
+        }
+
+        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            NSLog("Web classroom provisional error: \(error.localizedDescription)")
+        }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            guard let pendingBoot else { return }
-            let boot = WebLocalStorageBridge.bootScript(topic: pendingBoot.0, fileText: pendingBoot.1)
-            webView.evaluateJavaScript(boot) { _, error in
-                if let error {
-                    NSLog("Web classroom boot failed: \(error.localizedDescription)")
+            webView.evaluateJavaScript("document.getElementById('root')?.childElementCount ?? 0") { count, _ in
+                if let n = count as? Int, n == 0 {
+                    NSLog("Web classroom: #root still empty after load (topic=\(self.seedTopic))")
                 }
             }
-            self.pendingBoot = nil
         }
     }
 
@@ -95,7 +109,7 @@ private struct WebClassroomWebView: UIViewRepresentable {
         """
         <html><body style="font: -apple-system-body; padding: 2rem; color: #333;">
         <h2>Web 白板未打包</h2>
-        <p>此版本應內建 Web 教室。請重新安裝最新 IPA，或於開發端執行 <code>npm run build:native-web</code> 後再編譯。</p>
+        <p>請重新安裝最新 IPA。</p>
         </body></html>
         """
     }

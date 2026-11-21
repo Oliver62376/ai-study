@@ -14,7 +14,8 @@ declare global {
 
 export function consumeNativeClassBoot(): NativeClassBoot | null {
   const boot = window.aiStudyNativeBoot
-  if (!boot?.topic && !boot?.fileText) return null
+  if (!boot) return null
+  if (!boot.topic?.trim() && !boot.fileText?.trim()) return null
   delete window.aiStudyNativeBoot
   return boot
 }

@@ -129,7 +129,7 @@ struct SettingsView: View {
             }
         }
         Section("關於") {
-            LabeledContent("版本", value: "0.3.1-beta")
+            LabeledContent("版本", value: "0.3.2-beta")
             LabeledContent("平台", value: "iPadOS 17+ · 26+ 系統液態玻璃")
         }
     }
