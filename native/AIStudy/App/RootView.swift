@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct RootView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @State private var tab: MainTab = .aiHome
 
     enum MainTab: Hashable {
@@ -28,5 +29,10 @@ struct RootView: View {
             .tag(MainTab.settings)
         }
         .tint(NotebookTheme.header)
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                PomodoroClock.shared.syncFromWallClock()
+            }
+        }
     }
 }

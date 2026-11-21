@@ -7,6 +7,7 @@ import UniformTypeIdentifiers
 
 struct NotebookEditorView: View {
     @Bindable var notebook: Notebook
+    @Bindable private var pomodoro = PomodoroClock.shared
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
 
@@ -26,6 +27,7 @@ struct NotebookEditorView: View {
     @State private var showPhotoPicker = false
     @State private var selectedImageId: UUID?
     @State private var editingTextId: UUID?
+    @State private var showPomodoro = false
 
     private var sortedPages: [NotePage] {
         notebook.pages.sorted { $0.sortIndex < $1.sortIndex }
@@ -119,6 +121,9 @@ struct NotebookEditorView: View {
         .sheet(isPresented: $showToolbarAppearance) {
             ToolbarAppearanceSheet(appearance: appearance)
         }
+        .sheet(isPresented: $showPomodoro) {
+            PomodoroView()
+        }
         .sheet(isPresented: $showSettings) {
             NavigationStack {
                 SettingsView()
@@ -188,6 +193,19 @@ struct NotebookEditorView: View {
                 .textFieldStyle(.plain)
 
             Spacer(minLength: 8)
+
+            Button { showPomodoro = true } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "timer")
+                        .font(.body.weight(.semibold))
+                    if !pomodoro.compactLabel.isEmpty {
+                        Text(pomodoro.compactLabel)
+                            .font(.caption2.weight(.semibold))
+                            .monospacedDigit()
+                    }
+                }
+            }
+            .accessibilityLabel("番茄鐘")
 
             Button {
                 showNotebookAI.toggle()

@@ -10,6 +10,7 @@ struct HomeScreenView: View {
     @State private var fileContext = ""
     @State private var importFiles = false
     @State private var showSettings = false
+    @State private var showPomodoro = false
     @State private var showModelSheet = false
     @State private var path = NavigationPath()
     @State private var busy = false
@@ -73,6 +74,9 @@ struct HomeScreenView: View {
         .sheet(isPresented: $showSettings) {
             NavigationStack { SettingsView() }
         }
+        .sheet(isPresented: $showPomodoro) {
+            PomodoroView()
+        }
         .sheet(isPresented: $showModelSheet) {
             NavigationStack {
                 Form {
@@ -116,6 +120,8 @@ struct HomeScreenView: View {
             .accessibilityLabel("筆記本")
 
             Spacer()
+
+            PomodoroToolbarButton { showPomodoro = true }
 
             Button {
                 showSettings = true

@@ -54,6 +54,9 @@
 		A1000001000000000000002D /* PageOverlayRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000002E /* PageOverlayRenderer.swift */; };
 		A1000001000000000000002E /* LessonsRailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000002F /* LessonsRailView.swift */; };
 		A1000001000000000000002F /* ClassBoardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000030 /* ClassBoardView.swift */; };
+		A10000010000000000000030 /* PomodoroSettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000031 /* PomodoroSettingsStore.swift */; };
+		A10000010000000000000031 /* PomodoroClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000032 /* PomodoroClock.swift */; };
+		A10000010000000000000032 /* PomodoroView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000033 /* PomodoroView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -106,6 +109,9 @@
 		A2000001000000000000002E /* PageOverlayRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageOverlayRenderer.swift; sourceTree = "<group>"; };
 		A2000001000000000000002F /* LessonsRailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LessonsRailView.swift; sourceTree = "<group>"; };
 		A20000010000000000000030 /* ClassBoardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClassBoardView.swift; sourceTree = "<group>"; };
+		A20000010000000000000031 /* PomodoroSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PomodoroSettingsStore.swift; sourceTree = "<group>"; };
+		A20000010000000000000032 /* PomodoroClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PomodoroClock.swift; sourceTree = "<group>"; };
+		A20000010000000000000033 /* PomodoroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PomodoroView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -177,6 +183,7 @@
 				A4000001000000000000000B /* Whiteboard */,
 				A4000001000000000000000C /* Chat */,
 				A4000001000000000000000D /* Classroom */,
+				A4000001000000000000000E /* Pomodoro */,
 			);
 			path = Features;
 			sourceTree = "<group>";
@@ -228,6 +235,8 @@
 				A2000001000000000000002C /* LessonStore.swift */,
 				A2000001000000000000002D /* GradeStore.swift */,
 				A2000001000000000000002E /* PageOverlayRenderer.swift */,
+				A20000010000000000000031 /* PomodoroSettingsStore.swift */,
+				A20000010000000000000032 /* PomodoroClock.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -268,6 +277,14 @@
 				A20000010000000000000030 /* ClassBoardView.swift */,
 			);
 			path = Classroom;
+			sourceTree = "<group>";
+		};
+		A4000001000000000000000E /* Pomodoro */ = {
+			isa = PBXGroup;
+			children = (
+				A20000010000000000000033 /* PomodoroView.swift */,
+			);
+			path = Pomodoro;
 			sourceTree = "<group>";
 		};
 		A4000001000000000000000C /* Chat */ = {
@@ -394,6 +411,9 @@
 				A1000001000000000000002D /* PageOverlayRenderer.swift in Sources */,
 				A1000001000000000000002E /* LessonsRailView.swift in Sources */,
 				A1000001000000000000002F /* ClassBoardView.swift in Sources */,
+				A10000010000000000000030 /* PomodoroSettingsStore.swift in Sources */,
+				A10000010000000000000031 /* PomodoroClock.swift in Sources */,
+				A10000010000000000000032 /* PomodoroView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -445,7 +465,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.2.8;
+				MARKETING_VERSION = 0.2.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.oliver62376.aistudy.native;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -470,7 +490,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.2.8;
+				MARKETING_VERSION = 0.2.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.oliver62376.aistudy.native;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

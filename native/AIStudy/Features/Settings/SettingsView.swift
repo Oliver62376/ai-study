@@ -23,6 +23,8 @@ struct SettingsView: View {
     @State private var trashDays = TrashRetentionStore.retentionDays
     @State private var savedFlash = false
     @State private var grade = GradeStore.grade
+    @State private var pomodoro = PomodoroSettingsStore.settings
+    @State private var showPomodoroSheet = false
 
     private var current: ProviderId { providers.activeProvider }
 
@@ -57,6 +59,10 @@ struct SettingsView: View {
         .onDisappear {
             TrashRetentionStore.retentionDays = trashDays
             GradeStore.grade = grade
+            PomodoroSettingsStore.settings = pomodoro
+        }
+        .sheet(isPresented: $showPomodoroSheet) {
+            PomodoroView()
         }
     }
 
@@ -69,13 +75,20 @@ struct SettingsView: View {
                 }
             }
         }
+        Section("番茄鐘") {
+            Stepper("專注 \(pomodoro.workMinutes) 分", value: $pomodoro.workMinutes, in: 5 ... 90, step: 5)
+            Stepper("短休 \(pomodoro.shortBreakMinutes) 分", value: $pomodoro.shortBreakMinutes, in: 1 ... 30)
+            Stepper("長休 \(pomodoro.longBreakMinutes) 分", value: $pomodoro.longBreakMinutes, in: 5 ... 45, step: 5)
+            Toggle("專注結束自動休息", isOn: $pomodoro.autoStartBreaks)
+            Button("開啟番茄鐘計時器") { showPomodoroSheet = true }
+        }
         Section("回收桶") {
             Stepper(value: $trashDays, in: 1 ... 365) {
                 Text("保留 \(trashDays) 天")
             }
         }
         Section("關於") {
-            LabeledContent("版本", value: "0.2.8-beta")
+            LabeledContent("版本", value: "0.2.9-beta")
             LabeledContent("平台", value: "iPadOS 17+")
         }
     }
