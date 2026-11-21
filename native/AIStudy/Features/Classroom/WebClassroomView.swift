@@ -51,7 +51,7 @@ private struct WebClassroomWebView: UIViewRepresentable {
         let prefsScript = WKUserScript(
             source: WebLocalStorageBridge.injectionScript(),
             injectionTime: .atDocumentStart,
-            forMainFrame: true
+            forMainFrameOnly: true
         )
         config.userContentController.addUserScript(prefsScript)
 
