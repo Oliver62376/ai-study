@@ -46,11 +46,15 @@ enum ProviderId: String, CaseIterable, Identifiable, Codable {
 
     var hint: String {
         switch self {
-        case .grok: "xAI，建議主力供應商。"
-        case .lan: "Ollama / LM Studio 等 OpenAI 相容端點，金鑰可留空。"
-        default: "填入 API 金鑰與模型名稱。"
+        case .grok: "xAI。這個選項會一直留在設定裡。"
+        case .lan: "區網 OpenAI 相容服務，例如 Ollama、LM Studio。填位址即可，金鑰可留空。"
+        default: "填入 API 金鑰後，可從下拉選預設模型。"
         }
     }
+
+    var isLocal: Bool { self == .lan }
+
+    var isRequired: Bool { self == .grok }
 }
 
 struct AiSettingsBlob: Codable {
@@ -116,6 +120,13 @@ final class ProviderSettingsStore {
     }
 
     var isConnected: Bool {
-        !key(for: activeProvider).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || activeProvider == .lan
+        isConnected(for: activeProvider)
+    }
+
+    func isConnected(for provider: ProviderId) -> Bool {
+        if provider.isLocal {
+            return !base(for: provider).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        return !key(for: provider).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }

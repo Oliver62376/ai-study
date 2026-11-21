@@ -30,7 +30,9 @@ struct RootView: View {
                     switch section {
                     case .whiteboard:
                         WhiteboardView()
-                    case .classroom, .chat, .quiz:
+                    case .chat:
+                        ChatView()
+                    case .classroom, .quiz:
                         FeaturePlaceholderView(title: sectionTitle(section))
                     default:
                         EmptyView()

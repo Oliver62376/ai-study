@@ -1,56 +1,55 @@
 import SwiftUI
 
+private enum SettingsTab: String, CaseIterable, Identifiable {
+    case general, model, voice, notebook, pencil, prompts
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .general: "一般"
+        case .model: "模型"
+        case .voice: "語音"
+        case .notebook: "筆記"
+        case .pencil: "Pencil"
+        case .prompts: "提示詞"
+        }
+    }
+}
+
 struct SettingsView: View {
     @Bindable private var providers = ProviderSettingsStore.shared
+    @State private var tab: SettingsTab = .model
     @State private var trashDays = TrashRetentionStore.retentionDays
-    @State private var expandedProvider: ProviderId?
+    @State private var savedFlash = false
+
+    private var current: ProviderId { providers.activeProvider }
 
     var body: some View {
-        Form {
-            Section("AI 供應商") {
-                Picker("使用中", selection: $providers.blob.provider) {
-                    ForEach(ProviderId.allCases) { provider in
-                        Text(provider.title).tag(provider)
-                    }
-                }
-                LabeledContent("狀態", value: providers.isConnected ? "已連線" : "未設定")
-                ForEach(ProviderId.allCases) { provider in
-                    DisclosureGroup(provider.title, isExpanded: Binding(
-                        get: { expandedProvider == provider },
-                        set: { expandedProvider = $0 ? provider : nil }
-                    )) {
-                        Text(provider.hint)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                        SecureField("API 金鑰", text: bindingKey(provider))
-                        TextField("Base URL", text: bindingBase(provider))
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                        TextField("模型", text: bindingModel(provider))
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                    }
+        VStack(spacing: 0) {
+            Picker("分類", selection: $tab) {
+                ForEach(SettingsTab.allCases) { item in
+                    Text(item.title).tag(item)
                 }
             }
+            .pickerStyle(.segmented)
+            .padding()
 
-            Section("回收桶") {
-                Stepper(value: $trashDays, in: 1 ... 365) {
-                    Text("保留 \(trashDays) 天")
+            Form {
+                switch tab {
+                case .general:
+                    generalTab
+                case .model:
+                    modelTab
+                case .voice:
+                    placeholderTab("語音", "語速、音調與 TTS 音色（對齊 Web 語音分頁）。")
+                case .notebook:
+                    placeholderTab("筆記", "換頁方式與筆記相關偏好。")
+                case .pencil:
+                    placeholderTab("Apple Pencil", "防手掌、側鍵映射與筆壓選項。")
+                case .prompts:
+                    placeholderTab("提示詞", "可匯入 txt 的各場景自訂提示詞。")
                 }
-                Text("超過天數的筆記會在開啟筆記庫時自動永久刪除。")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section("Apple Pencil") {
-                Text("雙擊工具列可換底色；筆／橡皮二次點擊調粗細。")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section("關於") {
-                LabeledContent("版本", value: "0.2.5-beta")
-                LabeledContent("平台", value: "iPadOS 17+")
             }
         }
         .navigationTitle("設定")
@@ -59,17 +58,106 @@ struct SettingsView: View {
         }
     }
 
+    @ViewBuilder
+    private var generalTab: some View {
+        Section("回收桶") {
+            Stepper(value: $trashDays, in: 1 ... 365) {
+                Text("保留 \(trashDays) 天")
+            }
+        }
+        Section("關於") {
+            LabeledContent("版本", value: "0.2.6-beta")
+            LabeledContent("平台", value: "iPadOS 17+")
+        }
+    }
+
+    @ViewBuilder
+    private var modelTab: some View {
+        Section {
+            Text("金鑰只留在本機 · Grok 必留")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+
+        Section("供應商") {
+            ForEach(ProviderId.allCases) { provider in
+                Button {
+                    providers.activeProvider = provider
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                Text(provider.title)
+                                    .font(.headline)
+                                if provider.isRequired {
+                                    Text("必備")
+                                        .font(.caption2)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(Color.orange.opacity(0.2))
+                                        .clipShape(Capsule())
+                                }
+                            }
+                            if providers.activeProvider == provider {
+                                Text(provider.hint)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        Spacer()
+                        if providers.activeProvider == provider {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(Color.accentColor)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+
+        Section(current.title) {
+            Text(current.hint)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            if current.isLocal {
+                TextField("服務位址", text: bindingBase(current))
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+            }
+
+            SecureField(current.isLocal ? "API 金鑰（可留空）" : "API 金鑰", text: bindingKey(current))
+                .textContentType(.password)
+
+            ModelPickerField(providers: providers, provider: current)
+
+            LabeledContent("連線", value: providers.isConnected(for: current) ? "可用" : "未設定")
+        }
+
+        Section {
+            if savedFlash {
+                Text("已儲存")
+                    .foregroundStyle(.green)
+            }
+            Button("儲存設定") {
+                providers.persist()
+                savedFlash = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { savedFlash = false }
+            }
+        }
+    }
+
+    private func placeholderTab(_ title: String, _ detail: String) -> some View {
+        Section(title) {
+            Text(detail)
+                .foregroundStyle(.secondary)
+        }
+    }
+
     private func bindingKey(_ provider: ProviderId) -> Binding<String> {
         Binding(
             get: { providers.key(for: provider) },
             set: { providers.setKey($0, for: provider) }
-        )
-    }
-
-    private func bindingModel(_ provider: ProviderId) -> Binding<String> {
-        Binding(
-            get: { providers.model(for: provider) },
-            set: { providers.setModel($0, for: provider) }
         )
     }
 

@@ -18,7 +18,10 @@ struct HomeDashboardView: View {
                     }
                     .buttonStyle(.plain)
                     dashButton("教室", icon: "chalkboard.fill", section: .classroom)
-                    dashButton("對話", icon: "bubble.left.fill", section: .chat)
+                    NavigationLink(value: AppSection.chat) {
+                        tileLabel("對話", icon: "bubble.left.fill")
+                    }
+                    .buttonStyle(.plain)
                     dashButton("測驗", icon: "checkmark.circle.fill", section: .quiz)
                 }
             }
