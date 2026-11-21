@@ -22,6 +22,7 @@ struct SettingsView: View {
     @State private var tab: SettingsTab = .model
     @State private var trashDays = TrashRetentionStore.retentionDays
     @State private var savedFlash = false
+    @State private var grade = GradeStore.grade
 
     private var current: ProviderId { providers.activeProvider }
 
@@ -55,18 +56,26 @@ struct SettingsView: View {
         .navigationTitle("設定")
         .onDisappear {
             TrashRetentionStore.retentionDays = trashDays
+            GradeStore.grade = grade
         }
     }
 
     @ViewBuilder
     private var generalTab: some View {
+        Section("年級／程度") {
+            Picker("年級", selection: $grade) {
+                ForEach(GradeId.allCases) { item in
+                    Text(item.label).tag(item)
+                }
+            }
+        }
         Section("回收桶") {
             Stepper(value: $trashDays, in: 1 ... 365) {
                 Text("保留 \(trashDays) 天")
             }
         }
         Section("關於") {
-                LabeledContent("版本", value: "0.2.7-beta")
+            LabeledContent("版本", value: "0.2.8-beta")
             LabeledContent("平台", value: "iPadOS 17+")
         }
     }

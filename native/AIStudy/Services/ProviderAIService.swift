@@ -41,7 +41,7 @@ enum ProviderAIService {
     }
 
     private static var defaultChatSystem: String {
-        "你是友善的學習助手。用繁體中文、清楚回答，避免 Markdown 與項目符號。"
+        "你是友善的學習助手。用繁體中文、清楚回答，避免 Markdown 與項目符號。\n\(GradeStore.promptLabel)"
     }
 
     private static func askOpenAICompatible(base: String, key: String, model: String, system: String, user: String) async throws -> String {

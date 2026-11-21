@@ -13,6 +13,8 @@ struct HomeScreenView: View {
     @State private var showModelSheet = false
     @State private var path = NavigationPath()
     @State private var busy = false
+    @State private var lessons = LessonStore.load()
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private var connected: Bool { providers.isConnected }
     private var canStart: Bool {
@@ -27,17 +29,34 @@ struct HomeScreenView: View {
         NavigationStack(path: $path) {
             ZStack {
                 HomeAuroraBackground()
-                VStack(spacing: 0) {
-                    topBar
-                    Spacer(minLength: 24)
-                    hero
-                    modeSwitch
-                        .padding(.bottom, 12)
-                    glassComposer
-                        .padding(.horizontal, 20)
-                    notebookStrip
-                        .padding(.top, 20)
-                    Spacer(minLength: 24)
+                HStack(alignment: .top, spacing: 16) {
+                    if horizontalSizeClass == .regular {
+                        LessonsRailView(
+                            lessons: lessons,
+                            onOpen: reopenLesson,
+                            onDelete: { lesson in
+                                LessonStore.delete(id: lesson.id)
+                                lessons = LessonStore.load()
+                            }
+                        )
+                        .padding(.leading, 16)
+                        .padding(.top, 8)
+                    }
+                    VStack(spacing: 0) {
+                        topBar
+                        Spacer(minLength: 24)
+                        hero
+                        modeSwitch
+                            .padding(.bottom, 12)
+                        glassComposer
+                            .padding(.horizontal, 20)
+                        if horizontalSizeClass != .regular {
+                            lessonsInlineStrip
+                        }
+                        notebookStrip
+                            .padding(.top, 12)
+                        Spacer(minLength: 24)
+                    }
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
@@ -45,10 +64,11 @@ struct HomeScreenView: View {
                 switch route {
                 case let .chat(seed, context):
                     ChatView(seed: seed, context: context)
-                case let .board(seed, _):
-                    WhiteboardView(seedTopic: seed)
+                case let .board(seed, context):
+                    ClassBoardView(seedTopic: seed, context: context)
                 }
             }
+            .onAppear { lessons = LessonStore.load() }
         }
         .sheet(isPresented: $showSettings) {
             NavigationStack { SettingsView() }
@@ -259,6 +279,8 @@ struct HomeScreenView: View {
         }
         busy = true
         let question = seed.isEmpty ? "請根據附件內容回答。" : seed
+        LessonStore.upsert(title: question, topic: context, mode: mode)
+        lessons = LessonStore.load()
         switch mode {
         case .chat:
             path.append(HomeRoute.chat(seed: question, context: context))
@@ -266,7 +288,38 @@ struct HomeScreenView: View {
             path.append(HomeRoute.board(seed: question, context: context))
         }
         topic = ""
+        fileContext = ""
         busy = false
+    }
+
+    private var lessonsInlineStrip: some View {
+        Group {
+            if !lessons.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(lessons.prefix(8)) { lesson in
+                            Button(lesson.title) { reopenLesson(lesson) }
+                                .font(.caption.weight(.semibold))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .liquidGlassBar(cornerRadius: 999)
+                                .lineLimit(1)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                }
+                .padding(.top, 8)
+            }
+        }
+    }
+
+    private func reopenLesson(_ lesson: NativeLessonRecord) {
+        switch lesson.mode {
+        case .chat:
+            path.append(HomeRoute.chat(seed: lesson.title, context: lesson.topic))
+        case .board:
+            path.append(HomeRoute.board(seed: lesson.title, context: lesson.topic))
+        }
     }
 
     private func handleImport(_ result: Result<[URL], Error>) {

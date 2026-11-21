@@ -28,6 +28,8 @@ enum NotebookPDFExport {
                     let image = drawing.image(from: rect, scale: 2)
                     image.draw(in: rect)
                 }
+
+                PageOverlayRenderer.draw(overlays: page.overlays, in: rect, context: cg)
             }
         }
     }

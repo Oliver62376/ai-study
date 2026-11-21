@@ -11,7 +11,7 @@ enum PageThumbnailRenderer {
         let rect = CGRect(origin: .zero, size: size)
 
         let renderer = UIGraphicsImageRenderer(size: size)
-        let image = renderer.image { _ in
+        let image = renderer.image { ctx in
             UIColor(red: 0.99, green: 0.98, blue: 0.97, alpha: 1).setFill()
             UIRectFill(rect)
             if let data = page.backgroundImageData, let bg = UIImage(data: data) {
@@ -22,6 +22,7 @@ enum PageThumbnailRenderer {
                 let stroke = drawing.image(from: rect, scale: 2)
                 stroke.draw(in: rect)
             }
+            PageOverlayRenderer.draw(overlays: page.overlays, in: rect, context: ctx.cgContext)
         }
         return image
     }

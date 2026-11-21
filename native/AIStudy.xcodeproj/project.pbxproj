@@ -49,6 +49,11 @@
 		A10000010000000000000028 /* HomeRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000029 /* HomeRoute.swift */; };
 		A10000010000000000000029 /* HomeAuroraBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000002A /* HomeAuroraBackground.swift */; };
 		A1000001000000000000002A /* HomePreferencesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000002B /* HomePreferencesStore.swift */; };
+		A1000001000000000000002B /* LessonStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000002C /* LessonStore.swift */; };
+		A1000001000000000000002C /* GradeStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000002D /* GradeStore.swift */; };
+		A1000001000000000000002D /* PageOverlayRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000002E /* PageOverlayRenderer.swift */; };
+		A1000001000000000000002E /* LessonsRailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000002F /* LessonsRailView.swift */; };
+		A1000001000000000000002F /* ClassBoardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000030 /* ClassBoardView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -96,6 +101,11 @@
 		A20000010000000000000029 /* HomeRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeRoute.swift; sourceTree = "<group>"; };
 		A2000001000000000000002A /* HomeAuroraBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeAuroraBackground.swift; sourceTree = "<group>"; };
 		A2000001000000000000002B /* HomePreferencesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomePreferencesStore.swift; sourceTree = "<group>"; };
+		A2000001000000000000002C /* LessonStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LessonStore.swift; sourceTree = "<group>"; };
+		A2000001000000000000002D /* GradeStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GradeStore.swift; sourceTree = "<group>"; };
+		A2000001000000000000002E /* PageOverlayRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageOverlayRenderer.swift; sourceTree = "<group>"; };
+		A2000001000000000000002F /* LessonsRailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LessonsRailView.swift; sourceTree = "<group>"; };
+		A20000010000000000000030 /* ClassBoardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClassBoardView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -166,6 +176,7 @@
 				A40000010000000000000008 /* Settings */,
 				A4000001000000000000000B /* Whiteboard */,
 				A4000001000000000000000C /* Chat */,
+				A4000001000000000000000D /* Classroom */,
 			);
 			path = Features;
 			sourceTree = "<group>";
@@ -176,6 +187,7 @@
 				A20000010000000000000004 /* HomeDashboardView.swift */,
 				A20000010000000000000028 /* HomeScreenView.swift */,
 				A20000010000000000000029 /* HomeRoute.swift */,
+				A2000001000000000000002F /* LessonsRailView.swift */,
 			);
 			path = Home;
 			sourceTree = "<group>";
@@ -213,6 +225,9 @@
 				A20000010000000000000026 /* ProviderModelService.swift */,
 				A20000010000000000000027 /* ProviderAIService.swift */,
 				A2000001000000000000002B /* HomePreferencesStore.swift */,
+				A2000001000000000000002C /* LessonStore.swift */,
+				A2000001000000000000002D /* GradeStore.swift */,
+				A2000001000000000000002E /* PageOverlayRenderer.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -245,6 +260,14 @@
 				A20000010000000000000023 /* WhiteboardView.swift */,
 			);
 			path = Whiteboard;
+			sourceTree = "<group>";
+		};
+		A4000001000000000000000D /* Classroom */ = {
+			isa = PBXGroup;
+			children = (
+				A20000010000000000000030 /* ClassBoardView.swift */,
+			);
+			path = Classroom;
 			sourceTree = "<group>";
 		};
 		A4000001000000000000000C /* Chat */ = {
@@ -366,6 +389,11 @@
 				A10000010000000000000028 /* HomeRoute.swift in Sources */,
 				A10000010000000000000029 /* HomeAuroraBackground.swift in Sources */,
 				A1000001000000000000002A /* HomePreferencesStore.swift in Sources */,
+				A1000001000000000000002B /* LessonStore.swift in Sources */,
+				A1000001000000000000002C /* GradeStore.swift in Sources */,
+				A1000001000000000000002D /* PageOverlayRenderer.swift in Sources */,
+				A1000001000000000000002E /* LessonsRailView.swift in Sources */,
+				A1000001000000000000002F /* ClassBoardView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -417,7 +445,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.2.7;
+				MARKETING_VERSION = 0.2.8;
 				PRODUCT_BUNDLE_IDENTIFIER = com.oliver62376.aistudy.native;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -442,7 +470,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.2.7;
+				MARKETING_VERSION = 0.2.8;
 				PRODUCT_BUNDLE_IDENTIFIER = com.oliver62376.aistudy.native;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

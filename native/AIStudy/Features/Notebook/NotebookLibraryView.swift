@@ -30,6 +30,7 @@ struct NotebookLibraryView: View {
     @State private var sharePDF: URL?
     @State private var showNewFolder = false
     @State private var newFolderName = ""
+    @State private var actionBook: Notebook?
 
     private var visibleBooks: [Notebook] {
         let base = allNotebooks.filter { book in
@@ -136,6 +137,30 @@ struct NotebookLibraryView: View {
                 ShareSheet(items: [sharePDF])
             }
         }
+        .confirmationDialog(
+            "筆記本選項",
+            isPresented: Binding(get: { actionBook != nil }, set: { if !$0 { actionBook = nil } }),
+            titleVisibility: .visible,
+            presenting: actionBook
+        ) { book in
+            Button("分享 PDF") { exportShare(book) }
+            Button("重新命名") {
+                bookToRename = book
+                renameTitle = book.title
+                showRename = true
+            }
+            Button("移動到資料夾") {
+                bookToMove = book
+                showMoveFolder = true
+            }
+            Button("移到回收桶", role: .destructive) {
+                bookToTrash = book
+                showTrashConfirm = true
+            }
+            Button("取消", role: .cancel) {}
+        } message: { book in
+            Text(book.title)
+        }
     }
 
     private var folderChips: some View {
@@ -186,6 +211,9 @@ struct NotebookLibraryView: View {
                 bookToTrash = book
                 showTrashConfirm = true
             }
+        }
+        .onLongPressGesture(minimumDuration: 0.45) {
+            actionBook = book
         }
     }
 
