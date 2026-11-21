@@ -48,24 +48,16 @@ private struct SimulatedGlassBackground: View {
     }
 }
 
-private struct SystemGlassBackground: View {
-    var cornerRadius: CGFloat
-
-    var body: some View {
-        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        shape
-            .fill(.clear)
-            .glassEffect(.regular, in: shape)
-    }
-}
-
 private struct AdaptiveGlassBackground: View {
     var cornerRadius: CGFloat
     var elevated: Bool
 
     var body: some View {
         if #available(iOS 26.0, *) {
-            SystemGlassBackground(cornerRadius: cornerRadius)
+            let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            shape
+                .fill(.clear)
+                .glassEffect(.regular, in: shape)
         } else {
             SimulatedGlassBackground(cornerRadius: cornerRadius, elevated: elevated)
         }
