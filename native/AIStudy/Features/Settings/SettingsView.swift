@@ -129,7 +129,7 @@ struct SettingsView: View {
             }
         }
         Section("關於") {
-            LabeledContent("版本", value: "0.3.2-beta")
+            LabeledContent("版本", value: "0.3.3-beta")
             LabeledContent("平台", value: "iPadOS 17+ · 26+ 系統液態玻璃")
         }
     }
@@ -198,13 +198,25 @@ struct SettingsView: View {
         }
         Section("語音") {
             LabeledContent("語速", value: String(format: "%.2f", prefs.ttsRate))
-            Slider(value: $prefs.ttsRate, in: 0.7 ... 1.2, step: 0.02)
+            Slider(value: $prefs.ttsRate, in: 0.55 ... 1.1, step: 0.02)
             LabeledContent("音調", value: String(format: "%.2f", prefs.ttsPitch))
             Slider(value: $prefs.ttsPitch, in: 0.8 ... 1.2, step: 0.02)
             Picker("音色", selection: $prefs.ttsVoice) {
                 Text("系統預設").tag("")
                 ForEach(voices, id: \.id) { voice in
                     Text(voice.label).tag(voice.id)
+                }
+            }
+            Toggle("語音辨識後自動送出", isOn: $prefs.voiceAutoSend)
+        }
+        Section("白板教室") {
+            Toggle("雷射筆", isOn: $prefs.laserEnabled)
+            Stepper("雷射大小 \(prefs.laserSizePx) px", value: $prefs.laserSizePx, in: 10 ... 42)
+            Stepper("每句停頓 \(prefs.pauseAfterSentenceMs) ms", value: $prefs.pauseAfterSentenceMs, in: 0 ... 4000, step: 100)
+            Stepper("換頁停頓 \(prefs.pauseOnPageTurnMs) ms", value: $prefs.pauseOnPageTurnMs, in: 0 ... 6000, step: 100)
+            Picker("右側預設面板", selection: $prefs.materialPanel) {
+                ForEach(MaterialPanelMode.allCases) { mode in
+                    Text(mode.label).tag(mode)
                 }
             }
         }

@@ -34,6 +34,7 @@ import {
 import { HomeScreen, SettingsScreen } from './shell'
 import { listen, speak } from './speech'
 import { consumeNativeClassBoot } from './native-bridge'
+import { loadPreferences, savePreferences, type AppPreferences } from './preferences'
 
 const fast = new URLSearchParams(window.location.search).has('fast')
 
@@ -93,6 +94,7 @@ export default function App() {
   const [glows, setGlows] = useState<Glow[]>([])
   const [planning, setPlanning] = useState(false)
   const [planError, setPlanError] = useState('')
+  const [classPrefs, setClassPrefs] = useState<AppPreferences>(() => loadPreferences())
   const quizBack = useRef<'home' | 'class'>('home')
   const followedPage = useRef(0)
 
@@ -109,10 +111,23 @@ export default function App() {
     const timers: number[] = []
     let cancelSpeak = () => {}
     let closed = false
+    const pageTurnDelayMs = () => {
+      if (job.kind !== 'step') return 0
+      const course = stateRef.current.course
+      if (!course) return 0
+      const nextStep = course.steps[stateRef.current.stepIndex + 1]
+      if (!nextStep?.reveals.length) return 0
+      const currentMax = stateRef.current.reveals.reduce((max, item) => Math.max(max, item.page), 0)
+      const nextPage = nextStep.reveals.reduce((max, item) => Math.max(max, item.page), 0)
+      if (nextPage > currentMax) return loadPreferences().pauseOnPageTurnMs ?? 2000
+      return 0
+    }
+
     const finish = () => {
       if (closed) return
       closed = true
-      dispatch({ type: 'spoken', at: at() })
+      const wait = pageTurnDelayMs()
+      window.setTimeout(() => dispatch({ type: 'spoken', at: at() }), wait)
     }
 
     const writeStep = (text: string, onWritten: () => void) => {
@@ -229,9 +244,19 @@ export default function App() {
       dispatch({ type: 'pause' })
     }
     try {
-      listenStop.current = await listen(setDraft)
+      listenStop.current = await listen(setDraft, {
+        onFinal: (text) => {
+          if (!loadPreferences().voiceAutoSend) return
+          setDraft(text)
+          void onSend(text)
+        },
+      })
       setListening(true)
-      setHint('正在聽。只把內容轉成文字，不保存原聲。')
+      setHint(
+        loadPreferences().voiceAutoSend
+          ? '正在聽。辨識完成會自動送出。'
+          : '正在聽。只把內容轉成文字，不保存原聲。',
+      )
     } catch {
       setHint('這台裝置現在不能用語音輸入，直接打字即可。')
     }
@@ -422,6 +447,12 @@ export default function App() {
     setPlanning(true)
     void onPlan(boot.topic, boot.fileText, visionRef.current)
   }, [])
+
+  function patchClassPrefs(patch: Partial<AppPreferences>) {
+    const next = { ...loadPreferences(), ...patch }
+    savePreferences(next)
+    setClassPrefs(next)
+  }
 
   function beginResize(event: ReactPointerEvent<HTMLDivElement>) {
     const startX = event.clientX
@@ -617,8 +648,31 @@ export default function App() {
                   onClick={() => setMarker(color)}
                 />
               ))}
+              <label className="hud-inline" title="雷射筆">
+                <input
+                  type="checkbox"
+                  checked={classPrefs.laserEnabled}
+                  onChange={(event) => patchClassPrefs({ laserEnabled: event.target.checked })}
+                />
+                雷射
+              </label>
+              <label className="hud-inline hud-laser-size" title="雷射大小">
+                {classPrefs.laserSizePx}px
+                <input
+                  type="range"
+                  min={10}
+                  max={42}
+                  value={classPrefs.laserSizePx}
+                  disabled={!classPrefs.laserEnabled}
+                  onChange={(event) => patchClassPrefs({ laserSizePx: Number(event.target.value) })}
+                />
+              </label>
             </div>
-            <div className="pages" ref={pagesRef}>
+            <div
+              className="pages"
+              ref={pagesRef}
+              style={{ ['--laser-size' as string]: `${classPrefs.laserSizePx}px` }}
+            >
               <Sheet
                 {...sheetProps}
               page={shownPage}
@@ -627,7 +681,7 @@ export default function App() {
               {state.reveals.length === 0 && (
                 <p className="empty-hint">{planning ? 'AI 備課中…' : '按開始，板書會跟著講解寫上來。'}</p>
               )}
-              <Laser target={state.laser} root={pagesRef} />
+              <Laser target={classPrefs.laserEnabled ? state.laser : null} root={pagesRef} />
             </div>
             {(state.caption || hint || listening) && (
               <div className="hud-caption">
@@ -697,14 +751,46 @@ export default function App() {
         onPointerDown={beginResize}
       />
       <aside className="material">
-        <h2>教材</h2>
+        <div className="material-head">
+          <h2>側欄</h2>
+          <select
+            className="model-select material-mode"
+            value={classPrefs.materialPanel}
+            onChange={(event) => patchClassPrefs({ materialPanel: event.target.value as AppPreferences['materialPanel'] })}
+            aria-label="右側功能"
+          >
+            <option value="material">教材</option>
+            <option value="quiz">測驗</option>
+            <option value="notebook">筆記</option>
+          </select>
+        </div>
         <div className="material-body">
-          {(state.course?.sections ?? []).map((section) => (
-            <article key={section.id} className={section.id === state.materialId ? 'section current' : 'section'}>
-              <h3>{section.title}</h3>
-              <p>{section.body}</p>
-            </article>
-          ))}
+          {classPrefs.materialPanel === 'material' &&
+            (state.course?.sections ?? []).map((section) => (
+              <article key={section.id} className={section.id === state.materialId ? 'section current' : 'section'}>
+                <h3>{section.title}</h3>
+                <p>{section.body}</p>
+              </article>
+            ))}
+          {classPrefs.materialPanel === 'quiz' && (
+            <div className="side-panel-card">
+              <p className="os-muted">在此區塊快速開測驗，不需離開白板。</p>
+              <button type="button" className="nb-plain-btn" onClick={() => openQuiz('class')}>
+                開始測驗
+              </button>
+              <p className="os-muted">進度：{progress}</p>
+            </div>
+          )}
+          {classPrefs.materialPanel === 'notebook' && (
+            <div className="side-panel-card">
+              <p className="os-muted">
+                筆記請用 App 下方「筆記」分頁。上課時可先記重點，再回到白板繼續。
+              </p>
+              <button type="button" className="nb-plain-btn" onClick={() => setScreen('notebook-library')}>
+                打開筆記庫
+              </button>
+            </div>
+          )}
         </div>
       </aside>
     </div>

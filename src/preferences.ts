@@ -1,6 +1,7 @@
 export type UploadMode = 'text' | 'ocr' | 'vision'
 export type HomeMode = 'board' | 'chat'
 export type NotebookPageNav = 'vertical' | 'horizontal'
+export type MaterialPanelMode = 'material' | 'quiz' | 'notebook'
 
 export interface AppPreferences {
   uploadMode: UploadMode
@@ -9,6 +10,12 @@ export interface AppPreferences {
   ttsVoice: string
   homeMode: HomeMode
   notebookPageNav: NotebookPageNav
+  voiceAutoSend: boolean
+  laserEnabled: boolean
+  laserSizePx: number
+  pauseAfterSentenceMs: number
+  pauseOnPageTurnMs: number
+  materialPanel: MaterialPanelMode
 }
 
 const KEY = 'ai-study-prefs-v1'
@@ -16,11 +23,17 @@ const KEY = 'ai-study-prefs-v1'
 export function defaultPreferences(): AppPreferences {
   return {
     uploadMode: 'text',
-    ttsRate: 0.92,
+    ttsRate: 0.82,
     ttsPitch: 1,
     ttsVoice: '',
     homeMode: 'board',
     notebookPageNav: 'vertical',
+    voiceAutoSend: false,
+    laserEnabled: true,
+    laserSizePx: 18,
+    pauseAfterSentenceMs: 1500,
+    pauseOnPageTurnMs: 2000,
+    materialPanel: 'material',
   }
 }
 

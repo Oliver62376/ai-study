@@ -610,8 +610,8 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
             語速 {prefs.ttsRate.toFixed(2)}
             <input
               type="range"
-              min={0.7}
-              max={1.2}
+              min={0.55}
+              max={1.1}
               step={0.02}
               value={prefs.ttsRate}
               onChange={(event) => setPrefs({ ...prefs, ttsRate: Number(event.target.value) })}
@@ -637,6 +637,72 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
                   {voice.label}
                 </option>
               ))}
+            </select>
+          </label>
+          <label className="field checkbox-line">
+            <input
+              type="checkbox"
+              checked={prefs.voiceAutoSend}
+              onChange={(event) => setPrefs({ ...prefs, voiceAutoSend: event.target.checked })}
+            />
+            語音辨識後自動送出
+          </label>
+        </section>
+        )}
+
+        {settingsTab === 'voice' && (
+        <section>
+          <h2>白板節奏與雷射</h2>
+          <label className="field checkbox-line">
+            <input
+              type="checkbox"
+              checked={prefs.laserEnabled}
+              onChange={(event) => setPrefs({ ...prefs, laserEnabled: event.target.checked })}
+            />
+            啟用雷射筆
+          </label>
+          <label className="field">
+            雷射大小 {prefs.laserSizePx}px
+            <input
+              type="range"
+              min={10}
+              max={42}
+              value={prefs.laserSizePx}
+              onChange={(event) => setPrefs({ ...prefs, laserSizePx: Number(event.target.value) })}
+            />
+          </label>
+          <label className="field">
+            每句停頓 {prefs.pauseAfterSentenceMs} ms
+            <input
+              type="range"
+              min={0}
+              max={4000}
+              step={100}
+              value={prefs.pauseAfterSentenceMs}
+              onChange={(event) => setPrefs({ ...prefs, pauseAfterSentenceMs: Number(event.target.value) })}
+            />
+          </label>
+          <label className="field">
+            換頁停頓 {prefs.pauseOnPageTurnMs} ms
+            <input
+              type="range"
+              min={0}
+              max={6000}
+              step={100}
+              value={prefs.pauseOnPageTurnMs}
+              onChange={(event) => setPrefs({ ...prefs, pauseOnPageTurnMs: Number(event.target.value) })}
+            />
+          </label>
+          <label className="field">
+            右側預設面板
+            <select
+              className="model-select"
+              value={prefs.materialPanel}
+              onChange={(event) => setPrefs({ ...prefs, materialPanel: event.target.value as typeof prefs.materialPanel })}
+            >
+              <option value="material">教材</option>
+              <option value="quiz">測驗</option>
+              <option value="notebook">筆記</option>
             </select>
           </label>
         </section>

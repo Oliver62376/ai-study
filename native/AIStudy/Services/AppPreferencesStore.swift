@@ -30,12 +30,32 @@ enum NotebookPageNav: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+enum MaterialPanelMode: String, Codable, CaseIterable, Identifiable {
+    case material, quiz, notebook
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .material: "教材"
+        case .quiz: "測驗"
+        case .notebook: "筆記"
+        }
+    }
+}
+
 struct AppPreferences: Codable, Equatable {
     var uploadMode: UploadMode = .text
-    var ttsRate: Double = 0.92
+    var ttsRate: Double = 0.82
     var ttsPitch: Double = 1
     var ttsVoice: String = ""
     var notebookPageNav: NotebookPageNav = .vertical
+    var voiceAutoSend: Bool = false
+    var laserEnabled: Bool = true
+    var laserSizePx: Int = 18
+    var pauseAfterSentenceMs: Int = 1500
+    var pauseOnPageTurnMs: Int = 2000
+    var materialPanel: MaterialPanelMode = .material
 
     static let `default` = AppPreferences()
 }

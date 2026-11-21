@@ -25,6 +25,7 @@ struct WebClassroomView: View {
             .accessibilityLabel("返回首頁")
         }
         .navigationBarHidden(true)
+        .toolbar(.hidden, for: .tabBar)
         .onAppear {
             LessonStore.upsert(
                 title: seedTopic,
@@ -49,6 +50,10 @@ private struct WebClassroomWebView: UIViewRepresentable {
         config.defaultWebpagePreferences.allowsContentJavaScript = true
         config.setURLSchemeHandler(WebAppSchemeHandler(), forURLScheme: "aistudy")
 
+        let speech = context.coordinator.speechBridge
+        config.userContentController.add(speech, name: "aiStudyTTS")
+        config.userContentController.add(speech, name: "aiStudyTTSStop")
+
         var bootstrap = WebLocalStorageBridge.injectionScript()
         bootstrap += "\n"
         bootstrap += WebLocalStorageBridge.bootScript(topic: seedTopic, fileText: fileText)
@@ -65,6 +70,8 @@ private struct WebClassroomWebView: UIViewRepresentable {
         webView.backgroundColor = .systemBackground
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.navigationDelegate = context.coordinator
+        speech.webView = webView
+        context.coordinator.webView = webView
 
         if Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "WebApp") != nil {
             if let start = URL(string: "aistudy://app/index.html") {
@@ -79,9 +86,16 @@ private struct WebClassroomWebView: UIViewRepresentable {
 
     func updateUIView(_ webView: WKWebView, context: Context) {}
 
+    static func dismantleUIView(_ uiView: WKWebView, coordinator: Coordinator) {
+        uiView.configuration.userContentController.removeScriptMessageHandler(forName: "aiStudyTTS")
+        uiView.configuration.userContentController.removeScriptMessageHandler(forName: "aiStudyTTSStop")
+    }
+
     final class Coordinator: NSObject, WKNavigationDelegate {
         let seedTopic: String
         let fileText: String
+        let speechBridge = WebSpeechBridge()
+        weak var webView: WKWebView?
 
         init(seedTopic: String, fileText: String) {
             self.seedTopic = seedTopic

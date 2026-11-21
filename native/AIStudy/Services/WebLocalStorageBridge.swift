@@ -3,7 +3,7 @@ import Foundation
 enum WebLocalStorageBridge {
     /// 將原生設定注入 Web 教室用的 localStorage（與 Web App 鍵名一致）
     static func injectionScript() -> String {
-        var lines = ["(function(){try{"]
+        var lines = ["(function(){try{window.__AI_STUDY_EMBEDDED__=true;"]
         lines.append(jsSetB64("ai-study-provider-v1", providerJSON()))
         lines.append(jsSetB64("ai-study-prefs-v1", jsonString(AppPreferencesStore.preferences) ?? "{}"))
         lines.append(jsSetB64("ai-study-stylus-v1", jsonString(StylusPreferencesStore.preferences) ?? "{}"))
