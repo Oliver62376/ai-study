@@ -5,16 +5,15 @@ import SwiftUI
 struct NotebookInkToolbar: View {
     @Bindable var state: NotebookToolbarState
     @Bindable var appearance: ToolbarAppearanceStore
+    @Bindable private var presets = NotebookInkPresetsStore.shared
     var onUndo: () -> Void
     var onRedo: () -> Void
     var onPickImage: () -> Void
     var onAttachMaterial: () -> Void
-    var onToolbarDoubleTap: () -> Void
+    var onToolbarLongPress: () -> Void
 
-    private let swatches: [Color] = [
-        Color(hex: "#1c1c1e"), Color(hex: "#c41e1e"), Color(hex: "#1b4fd8"), Color(hex: "#17803d"),
-        Color(hex: "#6b3fa0"), Color(hex: "#f4a100"), Color(hex: "#e91e8c"), Color(hex: "#0e8a8a"), Color(hex: "#ffffff"),
-    ]
+    @State private var editPresetIndex: Int?
+    @State private var presetEditColor: Color = .black
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -61,8 +60,31 @@ struct NotebookInkToolbar: View {
         .background(appearance.toolbarBackground)
         .liquidGlassBar(cornerRadius: 14)
         .padding(.horizontal, 10)
-        .onTapGesture(count: 2) {
-            onToolbarDoubleTap()
+        .onLongPressGesture(minimumDuration: 0.55) {
+            onToolbarLongPress()
+        }
+        .sheet(isPresented: Binding(get: { editPresetIndex != nil }, set: { if !$0 { editPresetIndex = nil } })) {
+            NavigationStack {
+                Form {
+                    ColorPicker("預設筆色", selection: $presetEditColor, supportsOpacity: false)
+                }
+                .navigationTitle("編輯預設顏色")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("取消") { editPresetIndex = nil }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("儲存") {
+                            if let idx = editPresetIndex {
+                                presets.setColor(presetEditColor, at: idx)
+                                state.inkColor = presetEditColor
+                            }
+                            editPresetIndex = nil
+                        }
+                    }
+                }
+            }
+            .presentationDetents([.medium])
         }
     }
 
@@ -103,8 +125,8 @@ struct NotebookInkToolbar: View {
 
     private var colorRow: some View {
         HStack(spacing: 6) {
-            ForEach(swatches.indices, id: \.self) { index in
-                let swatch = swatches[index]
+            ForEach(presets.swatchHexes.indices, id: \.self) { index in
+                let swatch = presets.color(at: index)
                 Button {
                     state.inkColor = swatch
                     if state.inkKind == .eraser {
@@ -119,6 +141,12 @@ struct NotebookInkToolbar: View {
                         }
                 }
                 .buttonStyle(.plain)
+                .simultaneousGesture(
+                    TapGesture(count: 2).onEnded {
+                        presetEditColor = swatch
+                        editPresetIndex = index
+                    }
+                )
             }
             ColorPicker("", selection: $state.inkColor)
                 .labelsHidden()

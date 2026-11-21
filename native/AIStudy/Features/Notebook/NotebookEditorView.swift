@@ -26,8 +26,11 @@ struct NotebookEditorView: View {
     @State private var importMaterial = false
     @State private var showPhotoPicker = false
     @State private var selectedImageId: UUID?
+    @State private var selectedShapeId: UUID?
     @State private var editingTextId: UUID?
     @State private var showPomodoro = false
+    @State private var scrollOverscroll: CGFloat = 0
+    @State private var pullAddArmed = false
 
     private var sortedPages: [NotePage] {
         notebook.pages.sorted { $0.sortIndex < $1.sortIndex }
@@ -49,7 +52,7 @@ struct NotebookEditorView: View {
                     onRedo: { activeCanvas?.undoManager?.redo() },
                     onPickImage: { showPhotoPicker = true },
                     onAttachMaterial: { importMaterial = true },
-                    onToolbarDoubleTap: { showToolbarAppearance = true }
+                    onToolbarLongPress: { showToolbarAppearance = true }
                 )
                 .padding(.vertical, 8)
                 .background(NotebookTheme.canvasBackdrop)
@@ -68,9 +71,12 @@ struct NotebookEditorView: View {
                                 inkInteractionEnabled: toolbar.allowsInkOnCanvas,
                                 isActive: activePageId == page.id,
                                 selectedImageId: $selectedImageId,
+                                selectedShapeId: $selectedShapeId,
                                 editingTextId: $editingTextId,
                                 onSelect: {
                                     activePageId = page.id
+                                    selectedImageId = nil
+                                    selectedShapeId = nil
                                     toolbar.showPenSizePanel = false
                                     toolbar.showEraserSizePanel = false
                                     toolbar.showShapePanel = false
@@ -85,10 +91,27 @@ struct NotebookEditorView: View {
                                 }
                             )
                         }
+                        NotebookBottomPullFooter(
+                            pullProgress: scrollOverscroll,
+                            triggered: pullAddArmed
+                        )
                     }
+                    .background(NotebookScrollOverscroll(overscroll: $scrollOverscroll))
                     .padding(.bottom, 40)
                 }
                 .background(NotebookTheme.canvasBackdrop)
+                .onChange(of: scrollOverscroll) { _, value in
+                    guard activePageId == sortedPages.last?.id else {
+                        pullAddArmed = false
+                        return
+                    }
+                    if value > 64 {
+                        pullAddArmed = true
+                    } else if value < 8, pullAddArmed {
+                        pullAddArmed = false
+                        addPage()
+                    }
+                }
                 .onTapGesture {
                     toolbar.showPenSizePanel = false
                     toolbar.showEraserSizePanel = false
@@ -162,9 +185,10 @@ struct NotebookEditorView: View {
         .onChange(of: toolbar.inkColor) { _, _ in syncTool() }
         .onChange(of: toolbar.inkKind) { _, kind in
             syncTool()
-            if kind == .text, let page = activePage, page.overlays.texts.isEmpty {
-                let w = min(UIScreen.main.bounds.width - 24, 760)
-                addPlaceholderText(at: CGPoint(x: w / 2, y: 180), on: page)
+            selectedImageId = nil
+            selectedShapeId = nil
+            if kind != .text {
+                editingTextId = nil
             }
         }
         .onChange(of: toolbar.eraserStyle) { _, _ in syncTool() }

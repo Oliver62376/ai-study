@@ -11,6 +11,7 @@ struct PageOverlayView: View {
     @Binding var draftShapeStart: CGPoint?
     @Binding var draftShapeEnd: CGPoint?
     @Binding var selectedImageId: UUID?
+    @Binding var selectedShapeId: UUID?
     @Binding var editingTextId: UUID?
     var onTapForText: (CGPoint) -> Void
     var onPersist: () -> Void
@@ -19,18 +20,48 @@ struct PageOverlayView: View {
         let overlays = page.overlays
         ZStack {
             ForEach(overlays.shapes) { shape in
-                vectorShapeView(shape)
+                vectorShapeView(shape, selected: selectedShapeId == shape.id)
+                    .contentShape(shapeHitShape(shape))
+                    .onTapGesture {
+                        guard toolKind == .lasso else { return }
+                        selectedShapeId = shape.id
+                        selectedImageId = nil
+                        editingTextId = nil
+                    }
+                    .allowsHitTesting(toolKind == .lasso)
             }
             ForEach(Array(overlays.images.enumerated()), id: \.element.id) { index, sticker in
                 TransformableImageSticker(
                     sticker: bindingForImage(at: index),
                     isSelected: selectedImageId == sticker.id,
-                    onSelect: { selectedImageId = sticker.id },
+                    onSelect: {
+                        selectedImageId = sticker.id
+                        selectedShapeId = nil
+                        editingTextId = nil
+                    },
+                    onDeselect: {
+                        if selectedImageId == sticker.id { selectedImageId = nil }
+                    },
                     onChange: onPersist
                 )
             }
+            if toolKind == .shape, let a = draftShapeStart, let b = draftShapeEnd {
+                draftPath(from: a, to: b)
+                    .stroke(shapeColor, lineWidth: shapeStroke)
+            }
+            if toolKind == .shape {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .gesture(shapeGesture)
+            }
+            if toolKind == .text {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .gesture(textTapGesture(overlays: overlays))
+            }
             ForEach(Array(overlays.texts.enumerated()), id: \.element.id) { index, block in
                 textBlockView(block, index: index)
+                    .allowsHitTesting(toolKind == .text || editingTextId == block.id)
             }
             if toolKind == .text, overlays.texts.isEmpty, editingTextId == nil {
                 Text("在這裡輸入文字")
@@ -38,27 +69,39 @@ struct PageOverlayView: View {
                     .foregroundStyle(.secondary)
                     .allowsHitTesting(false)
             }
-            if toolKind == .shape, let a = draftShapeStart, let b = draftShapeEnd {
-                draftPath(from: a, to: b)
-                    .stroke(shapeColor, lineWidth: shapeStroke)
-            }
         }
         .frame(width: sheetSize.width, height: sheetSize.height)
-        .contentShape(Rectangle())
-        .gesture(shapeGesture)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onEnded { value in
-                    guard toolKind == .text else { return }
-                    onTapForText(value.location)
-                }
-        )
-        .onTapGesture {
-            if toolKind != .text {
-                selectedImageId = nil
-                editingTextId = nil
+    }
+
+    private func shapeHitShape(_ shape: VectorShape) -> Path {
+        let rect = boundingRect(for: shape)
+        return Path(rect.insetBy(dx: -8, dy: -8))
+    }
+
+    private func boundingRect(for shape: VectorShape) -> CGRect {
+        let a = CGPoint(x: shape.x1, y: shape.y1)
+        let b = CGPoint(x: shape.x2, y: shape.y2)
+        let pad: CGFloat = shape.kind == .line ? 16 : 8
+        let minX = min(a.x, b.x) - pad
+        let minY = min(a.y, b.y) - pad
+        let maxX = max(a.x, b.x) + pad
+        let maxY = max(a.y, b.y) + pad
+        return CGRect(x: minX, y: minY, width: max(28, maxX - minX), height: max(28, maxY - minY))
+    }
+
+    private func textTapGesture(overlays: PageOverlays) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onEnded { value in
+                guard toolKind == .text else { return }
+                guard value.translation.width * value.translation.width + value.translation.height * value.translation.height < 144 else { return }
+                let loc = value.location
+                if overlays.texts.contains(where: { textRect($0).contains(loc) }) { return }
+                onTapForText(loc)
             }
-        }
+    }
+
+    private func textRect(_ block: TextAnnotation) -> CGRect {
+        CGRect(x: block.x, y: block.y, width: block.width, height: block.height)
     }
 
     private func bindingForImage(at index: Int) -> Binding<ImageSticker> {
@@ -96,6 +139,7 @@ struct PageOverlayView: View {
                     .frame(width: block.width, height: block.height, alignment: .topLeading)
                     .onTapGesture {
                         selectedImageId = nil
+                        selectedShapeId = nil
                         editingTextId = block.id
                         clearPlaceholder(at: index)
                     }
@@ -166,13 +210,19 @@ struct PageOverlayView: View {
     }
 
     @ViewBuilder
-    private func vectorShapeView(_ shape: VectorShape) -> some View {
+    private func vectorShapeView(_ shape: VectorShape, selected: Bool) -> some View {
         let color = Color(hex: shape.colorHex)
         let path = shapePath(shape)
-        if shape.filled {
-            path.fill(color)
-        } else {
-            path.stroke(color, lineWidth: shape.strokeWidth)
+        ZStack {
+            if shape.filled {
+                path.fill(color)
+            } else {
+                path.stroke(color, lineWidth: shape.strokeWidth)
+            }
+            if selected {
+                shapeHitShape(shape)
+                    .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+            }
         }
     }
 
@@ -226,11 +276,16 @@ private struct TransformableImageSticker: View {
     @Binding var sticker: ImageSticker
     var isSelected: Bool
     var onSelect: () -> Void
+    var onDeselect: () -> Void
     var onChange: () -> Void
 
-  @State private var dragOffset: CGSize = .zero
-    @State private var liveScale: CGFloat = 1
-    @State private var liveRotation: Angle = .zero
+    @GestureState private var magnifyBy: CGFloat = 1
+    @GestureState private var twistBy: Angle = .zero
+    @State private var dragOffset: CGSize = .zero
+    @State private var isManipulating = false
+
+    private var displayWidth: CGFloat { max(40, sticker.width * magnifyBy) }
+    private var displayHeight: CGFloat { max(40, sticker.height * magnifyBy) }
 
     var body: some View {
         Group {
@@ -239,60 +294,71 @@ private struct TransformableImageSticker: View {
                 Image(uiImage: ui)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: sticker.width, height: sticker.height)
-                    .rotationEffect(Angle(degrees: sticker.rotationDegrees) + liveRotation)
-                    .scaleEffect(liveScale)
+                    .frame(width: displayWidth, height: displayHeight)
+                    .rotationEffect(Angle(degrees: sticker.rotationDegrees) + twistBy)
                     .overlay {
                         if isSelected {
                             RoundedRectangle(cornerRadius: 6)
                                 .stroke(Color.accentColor, lineWidth: 2)
-                                .frame(width: sticker.width, height: sticker.height)
                         }
                     }
                     .position(
                         x: sticker.x + sticker.width / 2 + dragOffset.width,
                         y: sticker.y + sticker.height / 2 + dragOffset.height
                     )
+                    .gesture(manipulationGesture)
+                    .onTapGesture {
+                        if isSelected, !isManipulating {
+                            onDeselect()
+                        } else {
+                            onSelect()
+                        }
+                    }
             }
         }
-        .gesture(
+    }
+
+    private var manipulationGesture: some Gesture {
+        SimultaneousGesture(
             DragGesture()
                 .onChanged { value in
                     onSelect()
+                    isManipulating = true
                     dragOffset = value.translation
                 }
                 .onEnded { value in
                     sticker.x += Double(value.translation.width)
                     sticker.y += Double(value.translation.height)
                     dragOffset = .zero
+                    isManipulating = false
                     onChange()
-                }
+                },
+            SimultaneousGesture(
+                MagnificationGesture()
+                    .updating($magnifyBy) { current, state, _ in
+                        onSelect()
+                        isManipulating = true
+                        state = current
+                    }
+                    .onEnded { scale in
+                        let factor = max(0.2, scale)
+                        sticker.width = max(40, sticker.width * factor)
+                        sticker.height = max(40, sticker.height * factor)
+                        isManipulating = false
+                        onChange()
+                    },
+                RotationGesture()
+                    .updating($twistBy) { current, state, _ in
+                        onSelect()
+                        isManipulating = true
+                        state = current
+                    }
+                    .onEnded { angle in
+                        sticker.rotationDegrees += angle.degrees
+                        isManipulating = false
+                        onChange()
+                    }
+            )
         )
-        .simultaneousGesture(
-            MagnificationGesture()
-                .onChanged { scale in
-                    onSelect()
-                    liveScale = scale
-                }
-                .onEnded { scale in
-                    sticker.width = max(40, sticker.width * scale)
-                    sticker.height = max(40, sticker.height * scale)
-                    liveScale = 1
-                    onChange()
-                }
-        )
-        .simultaneousGesture(
-            RotationGesture()
-                .onChanged { angle in
-                    onSelect()
-                    liveRotation = angle
-                }
-                .onEnded { angle in
-                    sticker.rotationDegrees += angle.degrees
-                    liveRotation = .zero
-                    onChange()
-                }
-        )
-        .onTapGesture { onSelect() }
     }
 }
