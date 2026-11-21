@@ -34,7 +34,7 @@ struct WhiteboardView: View {
                 onRedo: { canvas?.undoManager?.redo() },
                 onPickImage: {},
                 onAttachMaterial: {},
-                onToolbarDoubleTap: {}
+                onToolbarLongPress: {}
             )
             .padding(.vertical, 8)
 
