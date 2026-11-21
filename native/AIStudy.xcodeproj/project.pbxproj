@@ -26,7 +26,7 @@
 		A10000010000000000000011 /* NotebookToolbarState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000012 /* NotebookToolbarState.swift */; };
 		A10000010000000000000012 /* ToolWidthPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000013 /* ToolWidthPopover.swift */; };
 		A10000010000000000000013 /* NotebookIcons.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000014 /* NotebookIcons.swift */; };
-		A10000010000000000000014 /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000015 /* Color+Hex.swift */; };
+		A10000010000000000000014 /* ColorHex.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000015 /* ColorHex.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -51,7 +51,7 @@
 		A20000010000000000000012 /* NotebookToolbarState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookToolbarState.swift; sourceTree = "<group>"; };
 		A20000010000000000000013 /* ToolWidthPopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolWidthPopover.swift; sourceTree = "<group>"; };
 		A20000010000000000000014 /* NotebookIcons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookIcons.swift; sourceTree = "<group>"; };
-		A20000010000000000000015 /* Color+Hex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Color+Hex.swift; sourceTree = "<group>"; };
+		A20000010000000000000015 /* ColorHex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorHex.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -160,7 +160,7 @@
 			children = (
 				A20000010000000000000010 /* NotebookTheme.swift */,
 				A20000010000000000000014 /* NotebookIcons.swift */,
-				A20000010000000000000015 /* Color+Hex.swift */,
+				A20000010000000000000015 /* ColorHex.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -260,7 +260,7 @@
 				A10000010000000000000011 /* NotebookToolbarState.swift in Sources */,
 				A10000010000000000000012 /* ToolWidthPopover.swift in Sources */,
 				A10000010000000000000013 /* NotebookIcons.swift in Sources */,
-				A10000010000000000000014 /* Color+Hex.swift in Sources */,
+				A10000010000000000000014 /* ColorHex.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
