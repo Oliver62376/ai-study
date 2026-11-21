@@ -41,12 +41,28 @@ final class NotebookToolbarState {
         case .eraser:
             switch eraserStyle {
             case .bitmap:
-                return PKEraserTool(.bitmap)
+                return bitmapEraser(width: eraserWidth)
             case .stroke:
-                return PKEraserTool(.vector)
+                return strokeEraser(width: eraserWidth)
             }
         default:
             return PKInkingTool(.pen, color: UIColor(inkColor), width: inkWidth)
         }
+    }
+
+    private func bitmapEraser(width: CGFloat) -> PKTool {
+        let w = max(4, width)
+        if #available(iOS 17.0, *) {
+            return PKEraserTool(.bitmap, width: w)
+        }
+        return PKEraserTool(.bitmap)
+    }
+
+    private func strokeEraser(width: CGFloat) -> PKTool {
+        let w = max(4, width)
+        if #available(iOS 17.0, *) {
+            return PKEraserTool(.vector, width: w)
+        }
+        return PKEraserTool(.vector)
     }
 }

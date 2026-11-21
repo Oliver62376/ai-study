@@ -15,11 +15,7 @@ struct NotebookPageSheetView: View {
     @State private var canvasView: PKCanvasView?
 
     var body: some View {
-        VStack(spacing: 8) {
-            Text(page.title)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.white.opacity(0.9))
-
+        VStack(spacing: 0) {
             let sheetWidth = min(UIScreen.main.bounds.width - 24, 760)
             ZStack {
                 NotebookTheme.paper

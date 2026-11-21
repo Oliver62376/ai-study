@@ -27,6 +27,8 @@
 		A10000010000000000000012 /* ToolWidthPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000013 /* ToolWidthPopover.swift */; };
 		A10000010000000000000013 /* NotebookIcons.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000014 /* NotebookIcons.swift */; };
 		A10000010000000000000014 /* ColorHex.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000015 /* ColorHex.swift */; };
+		A10000010000000000000015 /* ToolbarAppearanceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000016 /* ToolbarAppearanceStore.swift */; };
+		A10000010000000000000016 /* ToolbarAppearanceSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000017 /* ToolbarAppearanceSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -52,6 +54,8 @@
 		A20000010000000000000013 /* ToolWidthPopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolWidthPopover.swift; sourceTree = "<group>"; };
 		A20000010000000000000014 /* NotebookIcons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookIcons.swift; sourceTree = "<group>"; };
 		A20000010000000000000015 /* ColorHex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorHex.swift; sourceTree = "<group>"; };
+		A20000010000000000000016 /* ToolbarAppearanceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolbarAppearanceStore.swift; sourceTree = "<group>"; };
+		A20000010000000000000017 /* ToolbarAppearanceSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolbarAppearanceSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -141,6 +145,7 @@
 				A2000001000000000000000D /* PageManagerSheet.swift */,
 				A20000010000000000000012 /* NotebookToolbarState.swift */,
 				A20000010000000000000013 /* ToolWidthPopover.swift */,
+				A20000010000000000000017 /* ToolbarAppearanceSheet.swift */,
 			);
 			path = Notebook;
 			sourceTree = "<group>";
@@ -161,6 +166,7 @@
 				A20000010000000000000010 /* NotebookTheme.swift */,
 				A20000010000000000000014 /* NotebookIcons.swift */,
 				A20000010000000000000015 /* ColorHex.swift */,
+				A20000010000000000000016 /* ToolbarAppearanceStore.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -261,6 +267,8 @@
 				A10000010000000000000012 /* ToolWidthPopover.swift in Sources */,
 				A10000010000000000000013 /* NotebookIcons.swift in Sources */,
 				A10000010000000000000014 /* ColorHex.swift in Sources */,
+				A10000010000000000000015 /* ToolbarAppearanceStore.swift in Sources */,
+				A10000010000000000000016 /* ToolbarAppearanceSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -312,7 +320,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.2.2;
+				MARKETING_VERSION = 0.2.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.oliver62376.aistudy.native;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -337,7 +345,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.2.2;
+				MARKETING_VERSION = 0.2.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.oliver62376.aistudy.native;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

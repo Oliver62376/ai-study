@@ -3,9 +3,11 @@ import SwiftUI
 
 struct NotebookInkToolbar: View {
     @Bindable var state: NotebookToolbarState
+    @Bindable var appearance: ToolbarAppearanceStore
     var onUndo: () -> Void
     var onRedo: () -> Void
     var onUnimplemented: (String) -> Void
+  var onToolbarDoubleTap: () -> Void
 
     private let swatches: [Color] = [
         Color(hex: "#1c1c1e"), Color(hex: "#c41e1e"), Color(hex: "#1b4fd8"), Color(hex: "#17803d"),
@@ -13,84 +15,47 @@ struct NotebookInkToolbar: View {
     ]
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 4) {
-                    penTool(.pen, icon: .pen)
-                    penTool(.fountain, icon: .fountain)
-                    penTool(.highlighter, icon: .highlighter)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 4) {
+                penTool(.pen, icon: .pen)
+                penTool(.fountain, icon: .fountain)
+                penTool(.highlighter, icon: .highlighter)
 
-                    colorRow
+                colorRow
 
-                    toolIcon(.shapes) {
-                        state.showShapePanel.toggle()
-                        state.showPenSizePanel = false
-                        state.showEraserSizePanel = false
-                        onUnimplemented("圖形工具")
-                    }
-                    eraserTool
-
-                    toolIcon(.lasso) { onUnimplemented("套索選取") }
-                    toolIcon(.text) { onUnimplemented("文字方塊") }
-
-                    Divider().frame(height: 36).padding(.horizontal, 4)
-
-                    toolIcon(.undo, label: false, action: onUndo)
-                    toolIcon(.redo, label: false, action: onRedo)
-                    toolIcon(.image) { onUnimplemented("插入圖片") }
-                    toolIcon(.materials) { onUnimplemented("教材附件") }
+                toolIcon(.shapes) {
+                    closePanels()
+                    onUnimplemented("圖形工具")
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-            }
-            .background(NotebookTheme.toolbarSurface)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
+                eraserTool
 
-            if state.showPenSizePanel, isPenFamily {
-                ToolWidthPopover(
-                    title: "筆畫粗細",
-                    width: $state.inkWidth,
-                    range: 1...20,
-                    previewColor: state.inkColor
-                )
-                .background(.regularMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .shadow(radius: 10)
-                .padding(.leading, 12)
-                .padding(.top, 72)
-            }
+                toolIcon(.lasso) { closePanels(); onUnimplemented("套索選取") }
+                toolIcon(.text) { closePanels(); onUnimplemented("文字方塊") }
 
-            if state.showEraserSizePanel {
-                VStack(alignment: .leading, spacing: 10) {
-                    Picker("模式", selection: $state.eraserStyle) {
-                        Text("像素").tag(EraserStyle.bitmap)
-                        Text("筆劃").tag(EraserStyle.stroke)
-                    }
-                    .pickerStyle(.segmented)
-                    if state.eraserStyle == .stroke {
-                        ToolWidthPopover(
-                            title: "橡皮粗細",
-                            width: $state.eraserWidth,
-                            range: 4...48,
-                            previewColor: .gray,
-                            isEraser: true
-                        )
-                    }
-                }
-                .padding(12)
-                .background(.regularMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .shadow(radius: 10)
-                .padding(.leading, 180)
-                .padding(.top, 72)
+                Divider().frame(height: 36).padding(.horizontal, 4)
+
+                toolIcon(.undo, label: false, action: onUndo)
+                toolIcon(.redo, label: false, action: onRedo)
+                toolIcon(.image) { closePanels(); onUnimplemented("插入圖片") }
+                toolIcon(.materials) { closePanels(); onUnimplemented("教材附件") }
             }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
         }
+        .frame(height: 58)
+        .background(appearance.toolbarBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
         .padding(.horizontal, 10)
+        .onTapGesture(count: 2) {
+            onToolbarDoubleTap()
+        }
     }
 
-    private var isPenFamily: Bool {
-        state.inkKind == .pen || state.inkKind == .fountain || state.inkKind == .highlighter
+    private func closePanels() {
+        state.showPenSizePanel = false
+        state.showEraserSizePanel = false
+        state.showShapePanel = false
     }
 
     @ViewBuilder
@@ -101,7 +66,7 @@ struct NotebookInkToolbar: View {
                 state.showEraserSizePanel = false
             } else {
                 state.inkKind = kind
-                state.showPenSizePanel = true
+                state.showPenSizePanel = false
                 state.showEraserSizePanel = false
             }
         }
@@ -113,7 +78,7 @@ struct NotebookInkToolbar: View {
                 state.showEraserSizePanel.toggle()
             } else {
                 state.inkKind = .eraser
-                state.showEraserSizePanel = true
+                state.showEraserSizePanel = false
                 state.showPenSizePanel = false
             }
         }
@@ -157,5 +122,58 @@ struct NotebookInkToolbar: View {
                 .buttonStyle(.plain)
             }
         }
+    }
+}
+
+/// 浮在筆記上層，不佔版面高度
+struct InkToolFloatingPanels: View {
+    @Bindable var state: NotebookToolbarState
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            if state.showPenSizePanel, isPenFamily {
+                ToolWidthPopover(
+                    title: "筆畫粗細",
+                    width: $state.inkWidth,
+                    range: 1...20,
+                    previewColor: state.inkColor
+                )
+                .background(.regularMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .shadow(radius: 12)
+                .padding(.leading, 16)
+                .padding(.top, 8)
+            }
+
+            if state.showEraserSizePanel {
+                VStack(alignment: .leading, spacing: 10) {
+                    Picker("模式", selection: $state.eraserStyle) {
+                        Text("像素").tag(EraserStyle.bitmap)
+                        Text("筆劃").tag(EraserStyle.stroke)
+                    }
+                    .pickerStyle(.segmented)
+                    ToolWidthPopover(
+                        title: "橡皮粗細",
+                        width: $state.eraserWidth,
+                        range: 4...48,
+                        previewColor: .gray,
+                        isEraser: true
+                    )
+                }
+                .padding(12)
+                .frame(width: 240)
+                .background(.regularMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .shadow(radius: 12)
+                .padding(.leading, 200)
+                .padding(.top, 8)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .allowsHitTesting(state.showPenSizePanel || state.showEraserSizePanel)
+    }
+
+    private var isPenFamily: Bool {
+        state.inkKind == .pen || state.inkKind == .fountain || state.inkKind == .highlighter
     }
 }
