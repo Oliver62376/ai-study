@@ -59,8 +59,7 @@ struct NotebookInkToolbar: View {
         }
         .frame(height: 58)
         .background(appearance.toolbarBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
+        .liquidGlassBar(cornerRadius: 14)
         .padding(.horizontal, 10)
         .onTapGesture(count: 2) {
             onToolbarDoubleTap()
@@ -197,27 +196,9 @@ struct InkToolFloatingPanels: View {
             }
 
             if state.showShapePanel {
-                VStack(alignment: .leading, spacing: 10) {
-                    Picker("圖形", selection: $state.shapeKind) {
-                        Text("直線").tag(ShapeKind.line)
-                        Text("矩形").tag(ShapeKind.rect)
-                        Text("橢圓").tag(ShapeKind.ellipse)
-                    }
-                    .pickerStyle(.segmented)
-                    ToolWidthPopover(
-                        title: "線條粗細",
-                        width: $state.shapeStroke,
-                        range: 1...16,
-                        previewColor: state.inkColor
-                    )
-                }
-                .padding(12)
-                .frame(width: 240)
-                .background(.regularMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .shadow(radius: 12)
-                .padding(.leading, 320)
-                .padding(.top, 8)
+                ShapeToolFloatingBar(state: state)
+                    .padding(.leading, 280)
+                    .padding(.top, 8)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

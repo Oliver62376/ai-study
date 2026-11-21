@@ -4,7 +4,7 @@ import SwiftUI
 @main
 struct AIStudyApp: App {
     var sharedModelContainer: ModelContainer = {
-        let schema = Schema([Notebook.self, NotePage.self])
+        let schema = Schema([Notebook.self, NotePage.self, NotebookFolder.self])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         do {
             return try ModelContainer(for: schema, configurations: [config])

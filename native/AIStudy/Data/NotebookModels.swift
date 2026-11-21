@@ -2,17 +2,45 @@ import Foundation
 import SwiftData
 
 @Model
+final class NotebookFolder {
+    var id: String
+    var name: String
+    var sortIndex: Int
+    var createdAt: Date
+
+    init(id: String = UUID().uuidString, name: String, sortIndex: Int = 0, createdAt: Date = .now) {
+        self.id = id
+        self.name = name
+        self.sortIndex = sortIndex
+        self.createdAt = createdAt
+    }
+}
+
+@Model
 final class Notebook {
     var id: String
     var title: String
     var updatedAt: Date
+    var folderId: String?
+    var deletedAt: Date?
     @Relationship(deleteRule: .cascade, inverse: \NotePage.notebook)
     var pages: [NotePage]
 
-    init(id: String = UUID().uuidString, title: String, updatedAt: Date = .now, pages: [NotePage] = []) {
+    var isTrashed: Bool { deletedAt != nil }
+
+    init(
+        id: String = UUID().uuidString,
+        title: String,
+        updatedAt: Date = .now,
+        folderId: String? = nil,
+        deletedAt: Date? = nil,
+        pages: [NotePage] = []
+    ) {
         self.id = id
         self.title = title
         self.updatedAt = updatedAt
+        self.folderId = folderId
+        self.deletedAt = deletedAt
         self.pages = pages
     }
 }

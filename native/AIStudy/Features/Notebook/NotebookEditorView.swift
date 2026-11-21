@@ -22,11 +22,10 @@ struct NotebookEditorView: View {
     @State private var sharePDF: URL?
     @State private var toastMessage = ""
     @State private var photoItem: PhotosPickerItem?
-    @State private var showTextSheet = false
-    @State private var textDraft = ""
-    @State private var textPlacement: CGPoint = .zero
     @State private var importMaterial = false
     @State private var showPhotoPicker = false
+    @State private var selectedImageId: UUID?
+    @State private var editingTextId: UUID?
 
     private var sortedPages: [NotePage] {
         notebook.pages.sorted { $0.sortIndex < $1.sortIndex }
@@ -63,8 +62,11 @@ struct NotebookEditorView: View {
                                 shapeKind: toolbar.shapeKind,
                                 shapeColor: toolbar.inkColor,
                                 shapeStroke: toolbar.shapeStroke,
-                                allowsCanvasDrawing: toolbar.allowsInkOnCanvas,
+                                shapeFilled: toolbar.shapeFilled,
+                                inkInteractionEnabled: toolbar.allowsInkOnCanvas,
                                 isActive: activePageId == page.id,
+                                selectedImageId: $selectedImageId,
+                                editingTextId: $editingTextId,
                                 onSelect: {
                                     activePageId = page.id
                                     toolbar.showPenSizePanel = false
@@ -77,9 +79,7 @@ struct NotebookEditorView: View {
                                 },
                                 onTapForText: { point in
                                     activePageId = page.id
-                                    textPlacement = point
-                                    textDraft = ""
-                                    showTextSheet = true
+                                    addPlaceholderText(at: point, on: page)
                                 }
                             )
                         }
@@ -129,11 +129,6 @@ struct NotebookEditorView: View {
                     }
             }
         }
-        .sheet(isPresented: $showTextSheet) {
-            TextAnnotationSheet(text: $textDraft) {
-                addTextAnnotation()
-            }
-        }
         .sheet(isPresented: Binding(get: { sharePDF != nil }, set: { if !$0 { sharePDF = nil } })) {
             if let sharePDF {
                 ShareSheet(items: [sharePDF])
@@ -159,15 +154,22 @@ struct NotebookEditorView: View {
         .onChange(of: toolbar.inkWidth) { _, _ in syncTool() }
         .onChange(of: toolbar.eraserWidth) { _, _ in syncTool() }
         .onChange(of: toolbar.inkColor) { _, _ in syncTool() }
-        .onChange(of: toolbar.inkKind) { _, _ in syncTool() }
+        .onChange(of: toolbar.inkKind) { _, kind in
+            syncTool()
+            if kind == .text, let page = activePage, page.overlays.texts.isEmpty {
+                let w = min(UIScreen.main.bounds.width - 24, 760)
+                addPlaceholderText(at: CGPoint(x: w / 2, y: 180), on: page)
+            }
+        }
         .onChange(of: toolbar.eraserStyle) { _, _ in syncTool() }
         .onChange(of: toolbar.shapeKind) { _, _ in syncTool() }
         .onChange(of: toolbar.shapeStroke) { _, _ in syncTool() }
     }
 
     private func syncTool() {
+        guard toolbar.allowsInkOnCanvas else { return }
         activeCanvas?.tool = toolbar.pkTool()
-        activeCanvas?.isUserInteractionEnabled = toolbar.allowsInkOnCanvas
+        activeCanvas?.isUserInteractionEnabled = true
     }
 
     private var headerBar: some View {
@@ -253,8 +255,10 @@ struct NotebookEditorView: View {
         let w: Double = min(280, Double(sheetWidth) * 0.45)
         let h = Double(image.size.height / image.size.width) * w
         var overlays = page.overlays
+        let stickerId = UUID()
         overlays.images.append(
             ImageSticker(
+                id: stickerId,
                 x: Double(sheetWidth) * 0.25,
                 y: 80,
                 width: w,
@@ -264,28 +268,30 @@ struct NotebookEditorView: View {
         )
         page.overlays = overlays
         page.updatedAt = .now
+        selectedImageId = stickerId
         try? context.save()
         photoItem = nil
         showPhotoPicker = false
     }
 
-    private func addTextAnnotation() {
-        guard let page = activePage else { return }
-        let text = textDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
+    private func addPlaceholderText(at point: CGPoint, on page: NotePage) {
+        let id = UUID()
         var overlays = page.overlays
         overlays.texts.append(
             TextAnnotation(
-                x: Double(textPlacement.x),
-                y: Double(textPlacement.y),
-                width: 220,
+                id: id,
+                x: max(8, Double(point.x) - 120),
+                y: max(8, Double(point.y) - 24),
+                width: 260,
                 height: 120,
-                text: text,
+                text: "",
                 colorHex: toolbar.inkColor.hexString,
-                fontSize: 18
+                fontSize: 22,
+                isPlaceholder: true
             )
         )
         page.overlays = overlays
+        editingTextId = id
         page.updatedAt = .now
         try? context.save()
     }

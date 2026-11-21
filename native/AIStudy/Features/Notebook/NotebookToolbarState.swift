@@ -26,8 +26,9 @@ final class NotebookToolbarState {
     var showPenSizePanel = false
     var showEraserSizePanel = false
     var showShapePanel = false
-    var shapeKind: ShapeKind = .line
+    var shapeKind: ShapeKind = .rect
     var shapeStroke: CGFloat = 3
+    var shapeFilled: Bool = false
 
     var allowsInkOnCanvas: Bool {
         switch inkKind {

@@ -13,10 +13,13 @@ struct HomeDashboardView: View {
 
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 12)], spacing: 12) {
                     dashButton("筆記", icon: "book.fill", section: .notebook)
+                    NavigationLink(value: AppSection.whiteboard) {
+                        tileLabel("白板", icon: "rectangle.and.pencil.and.ellipsis")
+                    }
+                    .buttonStyle(.plain)
                     dashButton("教室", icon: "chalkboard.fill", section: .classroom)
                     dashButton("對話", icon: "bubble.left.fill", section: .chat)
                     dashButton("測驗", icon: "checkmark.circle.fill", section: .quiz)
-                    dashButton("設定", icon: "gearshape.fill", section: .settings)
                 }
             }
             .padding(24)
@@ -25,19 +28,23 @@ struct HomeDashboardView: View {
         .background(Color(.systemGroupedBackground))
     }
 
-  private func dashButton(_ title: String, icon: String, section: AppSection) -> some View {
+    private func dashButton(_ title: String, icon: String, section: AppSection) -> some View {
         Button {
             onOpen(section)
         } label: {
-            VStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.title2)
-                Text(title)
-                    .font(.headline)
-            }
-            .frame(maxWidth: .infinity, minHeight: 100)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+            tileLabel(title, icon: icon)
         }
         .buttonStyle(.plain)
+    }
+
+    private func tileLabel(_ title: String, icon: String) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.title2)
+            Text(title)
+                .font(.headline)
+        }
+        .frame(maxWidth: .infinity, minHeight: 100)
+        .liquidGlassBar(cornerRadius: 16)
     }
 }

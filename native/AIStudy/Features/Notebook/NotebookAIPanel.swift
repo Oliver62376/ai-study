@@ -125,7 +125,7 @@ struct NotebookAIPanel: View {
     private func send() async {
         let message = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !message.isEmpty, !busy else { return }
-        guard AISettingsStore.shared.isConnected else {
+        guard ProviderSettingsStore.shared.isConnected else {
             onNeedSettings()
             return
         }

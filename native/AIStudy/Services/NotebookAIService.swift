@@ -21,7 +21,8 @@ enum NotebookAIService {
         history: [NbAiLine],
         pageImageJPEG: Data?
     ) async throws -> String {
-        let settings = AISettingsStore.shared
+        let settings = ProviderSettingsStore.shared
+        let provider = settings.activeProvider
         guard settings.isConnected else { throw NotebookAIError.notConfigured }
 
         let historyText = history.suffix(8).map { line in
@@ -56,17 +57,18 @@ enum NotebookAIService {
         }()
 
         let body: [String: Any] = [
-            "model": settings.model,
+            "model": settings.model(for: provider),
             "messages": [
                 ["role": "system", "content": system],
                 ["role": "user", "content": userContent],
             ],
         ]
 
-        let url = URL(string: settings.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/chat/completions")!
+        let base = settings.base(for: provider).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let url = URL(string: base + "/chat/completions")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.setValue("Bearer \(settings.apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(settings.key(for: provider))", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 

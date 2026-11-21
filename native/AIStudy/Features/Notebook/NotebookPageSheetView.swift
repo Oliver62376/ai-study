@@ -11,8 +11,11 @@ struct NotebookPageSheetView: View {
     var shapeKind: ShapeKind
     var shapeColor: Color
     var shapeStroke: CGFloat
-    var allowsCanvasDrawing: Bool
+    var shapeFilled: Bool
+    var inkInteractionEnabled: Bool
     var isActive: Bool
+    @Binding var selectedImageId: UUID?
+    @Binding var editingTextId: UUID?
     var onSelect: () -> Void
     var onFocusCanvas: (PKCanvasView) -> Void
     var onTapForText: (CGPoint) -> Void
@@ -30,6 +33,15 @@ struct NotebookPageSheetView: View {
         sheetWidth * 1060 / 820
     }
 
+    private var overlayHitTesting: Bool {
+        switch toolKind {
+        case .shape, .text:
+            isActive
+        default:
+            selectedImageId != nil || editingTextId != nil
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
@@ -42,7 +54,7 @@ struct NotebookPageSheetView: View {
                 PencilCanvasView(
                     drawing: $drawing,
                     tool: inkTool,
-                    allowsDrawing: allowsCanvasDrawing && isActive,
+                    inkInteractionEnabled: inkInteractionEnabled && isActive,
                     onCanvasReady: { canvas in
                         canvasView = canvas
                         if isActive {
@@ -56,12 +68,16 @@ struct NotebookPageSheetView: View {
                     shapeKind: shapeKind,
                     shapeColor: shapeColor,
                     shapeStroke: shapeStroke,
+                    shapeFilled: shapeFilled,
                     toolKind: toolKind,
                     draftShapeStart: $draftShapeStart,
                     draftShapeEnd: $draftShapeEnd,
-                    onTapForText: onTapForText
+                    selectedImageId: $selectedImageId,
+                    editingTextId: $editingTextId,
+                    onTapForText: onTapForText,
+                    onPersist: { persistOverlayOnly() }
                 )
-                .allowsHitTesting(toolKind == .shape || toolKind == .text)
+                .allowsHitTesting(overlayHitTesting)
             }
             .frame(width: sheetWidth, height: sheetHeight)
             .clipShape(RoundedRectangle(cornerRadius: 6))
@@ -80,15 +96,24 @@ struct NotebookPageSheetView: View {
             guard active, let canvasView else { return }
             onFocusCanvas(canvasView)
         }
-        .onChange(of: toolKind) { _, _ in
+        .onChange(of: toolKind) { _, new in
             draftShapeStart = nil
             draftShapeEnd = nil
+            if new == .pen || new == .fountain || new == .highlighter || new == .eraser || new == .lasso {
+                loadDrawing()
+            }
+        }
+        .onChange(of: inkInteractionEnabled) { _, enabled in
+            if enabled {
+                loadDrawing()
+            }
         }
     }
 
     private func loadDrawing() {
         if let data = page.pkDrawingData, let restored = try? PKDrawing(data: data) {
             drawing = restored
+            canvasView?.drawing = restored
         } else {
             drawing = PKDrawing()
         }
@@ -96,6 +121,13 @@ struct NotebookPageSheetView: View {
 
     private func persist(drawing: PKDrawing) {
         page.pkDrawingData = drawing.dataRepresentation()
+        page.updatedAt = .now
+        page.notebook?.updatedAt = .now
+        PageThumbnailRenderer.refreshThumbnail(page: page)
+        try? context.save()
+    }
+
+    private func persistOverlayOnly() {
         page.updatedAt = .now
         page.notebook?.updatedAt = .now
         PageThumbnailRenderer.refreshThumbnail(page: page)
