@@ -28,12 +28,21 @@ enum ChatThreadStore {
 }
 
 struct ChatView: View {
+    var seed: String?
+    var context: String
+
     @Bindable private var providers = ProviderSettingsStore.shared
     @State private var lines: [ChatLine] = []
     @State private var draft = ""
     @State private var busy = false
     @State private var showSettings = false
     @State private var showModelSheet = false
+    @State private var didBootstrap = false
+
+    init(seed: String? = nil, context: String = "") {
+        self.seed = seed
+        self.context = context
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -105,7 +114,18 @@ struct ChatView: View {
                 }
             }
         }
-        .onAppear { lines = ChatThreadStore.load() }
+        .onAppear {
+            lines = ChatThreadStore.load()
+            bootstrapSeedIfNeeded()
+        }
+    }
+
+    private func bootstrapSeedIfNeeded() {
+        guard !didBootstrap, let seed, !seed.isEmpty else { return }
+        didBootstrap = true
+        Task {
+            await send(with: seed, context: context)
+        }
     }
 
     private var providerBinding: Binding<ProviderId> {
@@ -163,19 +183,24 @@ struct ChatView: View {
 
     private func send() async {
         let message = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !message.isEmpty else { return }
+        draft = ""
+        await send(with: message, context: context)
+    }
+
+    private func send(with message: String, context: String) async {
         guard !message.isEmpty, !busy else { return }
         guard providers.isConnected else {
             showSettings = true
             return
         }
-        draft = ""
         busy = true
         let user = ChatLine(id: "u-\(Date().timeIntervalSince1970)", role: "user", text: message)
         let snapshot = lines + [user]
         lines = snapshot
         ChatThreadStore.save(snapshot)
         do {
-            let answer = try await ProviderAIService.ask(question: message, store: providers)
+            let answer = try await ProviderAIService.ask(question: message, context: context, store: providers)
             let assistant = ChatLine(id: "a-\(Date().timeIntervalSince1970)", role: "assistant", text: answer)
             let next = snapshot + [assistant]
             lines = next

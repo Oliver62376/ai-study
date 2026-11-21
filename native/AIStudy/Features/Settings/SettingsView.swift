@@ -66,7 +66,7 @@ struct SettingsView: View {
             }
         }
         Section("關於") {
-            LabeledContent("版本", value: "0.2.6-beta")
+                LabeledContent("版本", value: "0.2.7-beta")
             LabeledContent("平台", value: "iPadOS 17+")
         }
     }

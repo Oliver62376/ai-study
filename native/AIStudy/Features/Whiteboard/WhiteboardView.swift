@@ -2,6 +2,8 @@ import PencilKit
 import SwiftUI
 
 struct WhiteboardView: View {
+    var seedTopic: String = ""
+
     @State private var drawing = PKDrawing()
     @State private var tool = NotebookToolbarState()
     @State private var canvas: PKCanvasView?
@@ -9,8 +11,16 @@ struct WhiteboardView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("白板")
-                    .font(.title2.bold())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("白板")
+                        .font(.title2.bold())
+                    if !seedTopic.isEmpty {
+                        Text(seedTopic)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
                 Spacer()
                 Button("清除") { drawing = PKDrawing() }
             }

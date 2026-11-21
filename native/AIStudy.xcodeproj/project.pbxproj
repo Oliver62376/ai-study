@@ -45,6 +45,10 @@
 		A10000010000000000000024 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000025 /* ChatView.swift */; };
 		A10000010000000000000025 /* ProviderModelService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000026 /* ProviderModelService.swift */; };
 		A10000010000000000000026 /* ProviderAIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000027 /* ProviderAIService.swift */; };
+		A10000010000000000000027 /* HomeScreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000028 /* HomeScreenView.swift */; };
+		A10000010000000000000028 /* HomeRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000029 /* HomeRoute.swift */; };
+		A10000010000000000000029 /* HomeAuroraBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000002A /* HomeAuroraBackground.swift */; };
+		A1000001000000000000002A /* HomePreferencesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000002B /* HomePreferencesStore.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -88,6 +92,10 @@
 		A20000010000000000000025 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		A20000010000000000000026 /* ProviderModelService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderModelService.swift; sourceTree = "<group>"; };
 		A20000010000000000000027 /* ProviderAIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderAIService.swift; sourceTree = "<group>"; };
+		A20000010000000000000028 /* HomeScreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeScreenView.swift; sourceTree = "<group>"; };
+		A20000010000000000000029 /* HomeRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeRoute.swift; sourceTree = "<group>"; };
+		A2000001000000000000002A /* HomeAuroraBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeAuroraBackground.swift; sourceTree = "<group>"; };
+		A2000001000000000000002B /* HomePreferencesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomePreferencesStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -166,6 +174,8 @@
 			isa = PBXGroup;
 			children = (
 				A20000010000000000000004 /* HomeDashboardView.swift */,
+				A20000010000000000000028 /* HomeScreenView.swift */,
+				A20000010000000000000029 /* HomeRoute.swift */,
 			);
 			path = Home;
 			sourceTree = "<group>";
@@ -202,6 +212,7 @@
 				A20000010000000000000021 /* ProviderCatalog.swift */,
 				A20000010000000000000026 /* ProviderModelService.swift */,
 				A20000010000000000000027 /* ProviderAIService.swift */,
+				A2000001000000000000002B /* HomePreferencesStore.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -214,6 +225,7 @@
 				A20000010000000000000015 /* ColorHex.swift */,
 				A20000010000000000000016 /* ToolbarAppearanceStore.swift */,
 				A2000001000000000000001F /* LiquidGlassStyle.swift */,
+				A2000001000000000000002A /* HomeAuroraBackground.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -350,6 +362,10 @@
 				A10000010000000000000024 /* ChatView.swift in Sources */,
 				A10000010000000000000025 /* ProviderModelService.swift in Sources */,
 				A10000010000000000000026 /* ProviderAIService.swift in Sources */,
+				A10000010000000000000027 /* HomeScreenView.swift in Sources */,
+				A10000010000000000000028 /* HomeRoute.swift in Sources */,
+				A10000010000000000000029 /* HomeAuroraBackground.swift in Sources */,
+				A1000001000000000000002A /* HomePreferencesStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -401,7 +417,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.2.6;
+				MARKETING_VERSION = 0.2.7;
 				PRODUCT_BUNDLE_IDENTIFIER = com.oliver62376.aistudy.native;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -426,7 +442,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.2.6;
+				MARKETING_VERSION = 0.2.7;
 				PRODUCT_BUNDLE_IDENTIFIER = com.oliver62376.aistudy.native;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
