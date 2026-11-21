@@ -25,13 +25,13 @@ function write(list: LessonRecord[]) {
   localStorage.setItem(KEY, JSON.stringify(list.slice(0, MAX)))
 }
 
-export function upsertLesson(snapshot: Persist) {
+export function upsertLesson(snapshot: Persist, lessonId?: string) {
   if (!snapshot.course) return
   const title = snapshot.course.title.trim() || '未命名課程'
   const list = loadLessons()
-  const existing = list.find((item) => item.title === title && item.snapshot.course?.source === snapshot.course?.source)
+  const id = lessonId?.trim() || `L${Date.now()}`
   const record: LessonRecord = {
-    id: existing?.id ?? `L${Date.now()}`,
+    id,
     title,
     updatedAt: Date.now(),
     snapshot: {
@@ -41,6 +41,16 @@ export function upsertLesson(snapshot: Persist) {
   }
   const next = [record, ...list.filter((item) => item.id !== record.id)]
   write(next)
+  return id
+}
+
+export function syncLessonToNative(id: string, snapshot: Persist) {
+  if (typeof window === 'undefined' || !window.__AI_STUDY_EMBEDDED__) return
+  const snap = { ...snapshot, laser: null }
+  window.webkit?.messageHandlers?.aiStudyLessonSave?.postMessage({
+    id,
+    snapshot: JSON.stringify(snap),
+  })
 }
 
 export function deleteLesson(id: string) {

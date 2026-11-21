@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPoi
 import { createPortal } from 'react-dom'
 import { formatAiPlainText, noMarkdownHint } from './ai-format'
 import { appendExtra, loadCustomPrompts } from './custom-prompts'
+import { memoryContextForPrompt } from './memory-bank'
 import {
   clearNbAiThread,
   historyBlock,
@@ -94,7 +95,11 @@ export function NotebookAiPanel({
       ]
         .filter(Boolean)
         .join('\n\n')
-      const system = appendExtra(`${modePrompts[mode]}\n${noMarkdownHint}`, loadCustomPrompts().notebook, '筆記 AI 風格補充')
+      const system = appendExtra(
+        `${modePrompts[mode]}\n${noMarkdownHint}\n${memoryContextForPrompt(1200)}`,
+        loadCustomPrompts().notebook,
+        '筆記 AI 風格補充',
+      )
       const vision: VisionPage[] =
         attachPageImage && pagePreview ? [{ name: pageTitle, dataUrl: pagePreview }] : []
       const raw = await askProvider(settings, message, noteContext, system, vision)

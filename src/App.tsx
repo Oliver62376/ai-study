@@ -3,13 +3,25 @@ import { flushSync } from 'react-dom'
 import 'katex/dist/katex.min.css'
 import { Laser, Sheet, laserFor, markerColors, type Glow, type Mark } from './board'
 import { ChatView } from './chat-view'
-import { deleteLesson, lessonById, loadLessons, upsertLesson } from './lessons'
+import { deleteLesson, lessonById, loadLessons, syncLessonToNative, upsertLesson } from './lessons'
 import { NotebookLibrary } from './notebook-hub'
 import { NotebookScreen } from './notebook-ui'
 import type { VisionPage } from './ocr'
-import { loadState, reduce, saveState, snapshot, type State } from './model'
+import { loadState, reduce, saveState, snapshot, type Persist, type State } from './model'
 import { boardPdf, captureSheet, sharePdf } from './pdf'
-import { anchorsOf, boardToolPrompt, parseCourse, parseTeacherTurn, planPrompt } from './prompt'
+import {
+  anchorsOf,
+  boardToolPrompt,
+  parseCourse,
+  parseTeacherTurn,
+  planPrompt,
+  type TeacherTurn,
+} from './prompt'
+import {
+  rememberLesson,
+  rememberStudentQuestion,
+  rememberTeachingIntent,
+} from './memory-bank'
 import { QuizScreen } from './quiz'
 import { askProvider, isConnected, loadSettings } from './settings'
 import { gradeLabel } from './profile'
@@ -79,6 +91,8 @@ export default function App() {
   )
   const [lessons, setLessons] = useState(() => loadLessons())
   const [activeLessonId, setActiveLessonId] = useState('')
+  const pendingLessonIdRef = useRef('')
+  const lessonMemorizedRef = useRef('')
   const [chatSeed, setChatSeed] = useState('')
   const [chatContext, setChatContext] = useState('')
   const [chatVision, setChatVision] = useState<VisionPage[]>([])
@@ -98,10 +112,43 @@ export default function App() {
   const quizBack = useRef<'home' | 'class'>('home')
   const followedPage = useRef(0)
 
+  function lessonIdForSave() {
+    return activeLessonId || pendingLessonIdRef.current || ''
+  }
+
+  function ensureLessonId() {
+    const existing = lessonIdForSave()
+    if (existing) return existing
+    const id = `L${Date.now()}`
+    pendingLessonIdRef.current = id
+    setActiveLessonId(id)
+    return id
+  }
+
+  function applyTeacherTurn(turn: TeacherTurn, courseTitle: string, studentQuestion?: string) {
+    if (turn.highlights.length) setGlows((current) => [...current, ...turn.highlights])
+    for (const reveal of turn.draws) {
+      dispatch({ type: 'reveal', reveal, laser: laserFor(reveal), at: at() })
+      if (reveal.type === 'svg' && reveal.intent) rememberTeachingIntent(reveal.intent, courseTitle)
+    }
+    if (turn.intent) rememberTeachingIntent(turn.intent, courseTitle)
+    if (studentQuestion && turn.say.trim()) rememberStudentQuestion(studentQuestion, turn.say, courseTitle)
+  }
+
+  useEffect(() => {
+    const course = state.course
+    if (!course || lessonMemorizedRef.current === course.title) return
+    lessonMemorizedRef.current = course.title
+    rememberLesson(course.title, course.audience, course.sections.map((section) => section.title))
+  }, [state.course])
+
   useEffect(() => {
     saveState(state)
     if (!state.course) return
-    upsertLesson(snapshot(state))
+    const id = ensureLessonId()
+    const snap = snapshot(state)
+    upsertLesson(snap, id)
+    syncLessonToNative(id, snap)
     setLessons(loadLessons())
   }, [state])
 
@@ -198,7 +245,7 @@ export default function App() {
         .then((spoken) => {
           if (closed || !spoken) return
           const turn = parseTeacherTurn(spoken, outline)
-          if (turn.highlights.length) setGlows((current) => [...current, ...turn.highlights])
+          applyTeacherTurn(turn, courseNow.title, outline)
           dispatch({ type: 'retell', text: turn.say })
           arm(turn.say)
         })
@@ -301,7 +348,7 @@ export default function App() {
             )
             if (!raw) return
             const turn = parseTeacherTurn(raw, '')
-            if (turn.highlights.length) setGlows((current) => [...current, ...turn.highlights])
+            applyTeacherTurn(turn, course.title, text)
             if (turn.say?.trim()) dispatch({ type: 'retell', text: turn.say.trim() })
           } catch {
             setHint('這次沒連上模型。')
@@ -410,7 +457,7 @@ export default function App() {
       const course = raw ? parseCourse(raw, source, audience) : null
       if (!course) throw new Error('empty')
       dispatch({ type: 'load-course', course, at: at() })
-      setActiveLessonId('')
+      if (pendingLessonIdRef.current) setActiveLessonId(pendingLessonIdRef.current)
     } catch {
       setPlanError('備課沒有成功。確認 API 有回應，或把教材縮短再試。')
       setScreen('home')
@@ -439,11 +486,38 @@ export default function App() {
     else if (state.phase === 'ready' && !state.finished) play()
   }
 
+  function restoreLessonPersist(persist: Persist, id: string) {
+    upsertLesson(persist, id)
+    dispatch({ type: 'restore-lesson', persist, at: at() })
+    setActiveLessonId(id)
+    pendingLessonIdRef.current = id
+    setPlanning(false)
+    setPlanError('')
+    setLessons(loadLessons())
+  }
+
   useEffect(() => {
     const boot = consumeNativeClassBoot()
     if (!boot) return
     visionRef.current = boot.vision ?? []
     setScreen('class')
+
+    const tryId = boot.lessonId?.trim() ?? ''
+    if (tryId) pendingLessonIdRef.current = tryId
+
+    if (boot.snapshot?.course) {
+      restoreLessonPersist(boot.snapshot, tryId || `L${Date.now()}`)
+      return
+    }
+
+    if (tryId) {
+      const saved = lessonById(tryId)
+      if (saved?.snapshot?.course) {
+        restoreLessonPersist(saved.snapshot, tryId)
+        return
+      }
+    }
+
     setPlanning(true)
     void onPlan(boot.topic, boot.fileText, visionRef.current)
   }, [])
@@ -493,6 +567,9 @@ export default function App() {
         }}
         onStartBoard={(topic, fileText, vision) => {
           visionRef.current = vision
+          const id = `L${Date.now()}`
+          pendingLessonIdRef.current = id
+          setActiveLessonId(id)
           void onPlan(topic, fileText, vision)
         }}
         onStartChat={onStartChat}

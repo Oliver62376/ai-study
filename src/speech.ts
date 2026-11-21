@@ -10,6 +10,8 @@ declare global {
       messageHandlers?: {
         aiStudyTTS?: { postMessage: (body: unknown) => void }
         aiStudyTTSStop?: { postMessage: (body: unknown) => void }
+        aiStudyLessonSave?: { postMessage: (body: unknown) => void }
+        aiStudyMemorySave?: { postMessage: (body: unknown) => void }
       }
     }
   }

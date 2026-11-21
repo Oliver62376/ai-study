@@ -3,7 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 private enum SettingsTab: String, CaseIterable, Identifiable {
-    case general, model, voice, notebook, pencil, prompts
+    case general, model, voice, notebook, pencil, prompts, memory
 
     var id: String { rawValue }
 
@@ -15,6 +15,7 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
         case .notebook: "筆記"
         case .pencil: "Pencil"
         case .prompts: "提示詞"
+        case .memory: "記憶庫"
         }
     }
 }
@@ -67,6 +68,8 @@ struct SettingsView: View {
                     pencilTab
                 case .prompts:
                     promptsTab
+                case .memory:
+                    memoryTab
                 }
             }
             .listStyle(.insetGrouped)
@@ -129,7 +132,7 @@ struct SettingsView: View {
             }
         }
         Section("關於") {
-            LabeledContent("版本", value: "0.3.3-beta")
+            LabeledContent("版本", value: "0.3.4-beta")
             LabeledContent("平台", value: "iPadOS 17+ · 26+ 系統液態玻璃")
         }
     }
@@ -273,6 +276,22 @@ struct SettingsView: View {
     }
 
     @ViewBuilder
+    private var memoryTab: some View {
+        Section {
+            Text("記憶庫存在本機，備課／講課／Chat 會自動引用。在白板教室內可開「設定 → 記憶庫」編輯；上課後會自動累積課程、問答與 SVG 教學意圖。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        Section("同步狀態") {
+            let raw = UserDefaults.standard.string(forKey: "ai-study-memory-v1") ?? ""
+            LabeledContent(
+                "條目數",
+                value: raw.isEmpty ? "尚無" : String(MemoryEntryCount.decode(from: raw))
+            )
+        }
+    }
+
+    @ViewBuilder
     private var promptsTab: some View {
         Section {
             Text("白板 JSON 工具格式永遠由 App 內建。留空則只用內建規則。")
@@ -315,5 +334,17 @@ struct SettingsView: View {
             get: { providers.base(for: provider) },
             set: { providers.setBase($0, for: provider) }
         )
+    }
+}
+
+private enum MemoryEntryCount {
+    static func decode(from raw: String) -> Int {
+        guard let data = raw.data(using: .utf8),
+              let list = try? JSONDecoder().decode([MemoryRow].self, from: data) else { return 0 }
+        return list.count
+    }
+
+    private struct MemoryRow: Decodable {
+        var id: String?
     }
 }

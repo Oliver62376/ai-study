@@ -5,6 +5,15 @@ export type InkColor = 'default' | 'chalk' | 'blue' | 'red' | 'green'
 export type Reveal =
   | { type: 'text'; id: string; page: number; text: string; variant: 'title' | 'body' | 'ink'; color?: InkColor }
   | { type: 'formula'; id: string; page: number; latex: string; plain: string }
+  | {
+      type: 'svg'
+      id: string
+      page: number
+      svg: string
+      caption?: string
+      /** 這張圖想表達的教學意圖（給記憶庫／後續講解） */
+      intent?: string
+    }
   | { type: 'wave'; id: string; page: number }
   | { type: 'mark'; id: string; page: number }
   | { type: 'anim'; id: string; page: number }

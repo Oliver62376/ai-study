@@ -58,11 +58,11 @@ export const promptTemplateFiles: Record<PromptSlot, string> = {
 export function templateBody(slot: PromptSlot): string {
   const hint = '（可留空；白板 JSON 工具指令由 App 自動附加，請勿寫在這裡。）\n\n'
   const samples: Record<PromptSlot, string> = {
-    plan: `${hint}例：多用在生活中舉例，每一步板書少字、多畫示意。`,
-    chat: `${hint}例：回答先用一句結論，再給步驟，適合國中自學。`,
+    plan: `${hint}例：多用在生活中舉例，每一步板書少字；需要示意時用 diagram.svg 畫箭頭／圖形，並寫 intent 教學意圖。`,
+    chat: `${hint}例：回答先用一句結論，再給步驟，適合國中自學；可引用記憶庫中的學習背景。`,
     notebook: `${hint}例：解釋手寫時假設學生基礎弱，多提醒易錯點。`,
     quiz: `${hint}例：題目情境化，避免純定義背誦。`,
-    teach: `${hint}例：語氣像耐心班導，鼓勵學生，不批評。`,
+    teach: `${hint}例：語氣像耐心班導；學生卡住時可用 draws 畫小 SVG 示意，並用 teachingIntent 說明這張圖的目的。`,
   }
   return samples[slot]
 }
@@ -75,9 +75,10 @@ export function readmePromptText(appVersion: string) {
     '此資料夾內的 txt 可編輯後，在 App「設定 → 提示詞」匯入或貼上。',
     '',
     '【永遠由 App 內建、不需也不應寫入 txt】',
-    '- 白板講課的 JSON 格式（say、highlights）',
-    '- 備課課程結構 JSON（sections、steps、reveals）',
+    '- 白板講課的 JSON 格式（say、highlights、draws／SVG）',
+    '- 備課課程結構 JSON（sections、steps、reveals、diagram.svg）',
     '- 測驗題目 JSON（questions）',
+    '- 記憶庫條目（在設定 → 記憶庫管理；備課／講課會自動注入）',
     '',
     '【可自訂的 txt】',
     '- 備課-自訂提示詞.txt → 教學風格、科目語氣',

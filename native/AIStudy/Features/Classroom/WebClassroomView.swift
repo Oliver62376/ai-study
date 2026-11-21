@@ -4,12 +4,13 @@ import WebKit
 struct WebClassroomView: View {
     let seedTopic: String
     let context: String
+    let lessonId: String
 
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            WebClassroomWebView(seedTopic: seedTopic, fileText: context)
+            WebClassroomWebView(seedTopic: seedTopic, fileText: context, lessonId: lessonId)
                 .ignoresSafeArea()
 
             Button {
@@ -27,10 +28,13 @@ struct WebClassroomView: View {
         .navigationBarHidden(true)
         .toolbar(.hidden, for: .tabBar)
         .onAppear {
-            LessonStore.upsert(
+            let snap = LessonStore.record(id: lessonId)?.snapshotJSON
+            _ = LessonStore.register(
+                id: lessonId,
                 title: seedTopic,
                 topic: context.isEmpty ? seedTopic : context,
-                mode: .board
+                mode: .board,
+                snapshotJSON: snap
             )
         }
     }
@@ -39,9 +43,10 @@ struct WebClassroomView: View {
 private struct WebClassroomWebView: UIViewRepresentable {
     let seedTopic: String
     let fileText: String
+    let lessonId: String
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(seedTopic: seedTopic, fileText: fileText)
+        Coordinator(seedTopic: seedTopic, fileText: fileText, lessonId: lessonId)
     }
 
     func makeUIView(context: Context) -> WKWebView {
@@ -51,12 +56,21 @@ private struct WebClassroomWebView: UIViewRepresentable {
         config.setURLSchemeHandler(WebAppSchemeHandler(), forURLScheme: "aistudy")
 
         let speech = context.coordinator.speechBridge
+        let lessons = context.coordinator.lessonBridge
         config.userContentController.add(speech, name: "aiStudyTTS")
         config.userContentController.add(speech, name: "aiStudyTTSStop")
+        config.userContentController.add(lessons, name: "aiStudyLessonSave")
+        config.userContentController.add(lessons, name: "aiStudyMemorySave")
 
+        let snapshotJSON = LessonStore.record(id: lessonId)?.snapshotJSON
         var bootstrap = WebLocalStorageBridge.injectionScript()
         bootstrap += "\n"
-        bootstrap += WebLocalStorageBridge.bootScript(topic: seedTopic, fileText: fileText)
+        bootstrap += WebLocalStorageBridge.bootScript(
+            topic: seedTopic,
+            fileText: fileText,
+            lessonId: lessonId,
+            snapshotJSON: snapshotJSON
+        )
 
         let prefsScript = WKUserScript(
             source: bootstrap,
@@ -89,17 +103,22 @@ private struct WebClassroomWebView: UIViewRepresentable {
     static func dismantleUIView(_ uiView: WKWebView, coordinator: Coordinator) {
         uiView.configuration.userContentController.removeScriptMessageHandler(forName: "aiStudyTTS")
         uiView.configuration.userContentController.removeScriptMessageHandler(forName: "aiStudyTTSStop")
+        uiView.configuration.userContentController.removeScriptMessageHandler(forName: "aiStudyLessonSave")
+        uiView.configuration.userContentController.removeScriptMessageHandler(forName: "aiStudyMemorySave")
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate {
         let seedTopic: String
         let fileText: String
+        let lessonId: String
         let speechBridge = WebSpeechBridge()
+        let lessonBridge = WebLessonBridge()
         weak var webView: WKWebView?
 
-        init(seedTopic: String, fileText: String) {
+        init(seedTopic: String, fileText: String, lessonId: String) {
             self.seedTopic = seedTopic
             self.fileText = fileText
+            self.lessonId = lessonId
         }
 
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {

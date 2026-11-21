@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEve
 import katex from 'katex'
 import type { InkColor, Reveal } from './model'
 import { globalPalmGuard } from './pointer-stylus'
+import { sanitizeBoardSvg } from './svg-sanitize'
 
 const inkClass: Record<InkColor, string> = {
   default: '',
@@ -309,6 +310,16 @@ export function Sheet({
             )
           }
           if (item.type === 'formula') return <Formula key={item.id} id={item.id} latex={item.latex} />
+          if (item.type === 'svg')
+            return (
+              <BoardSvg
+                key={item.id}
+                id={item.id}
+                svg={item.svg}
+                caption={item.caption}
+                intent={item.intent}
+              />
+            )
           if (item.type === 'wave') return <WaveFigure key={item.id} reveals={reveals} />
           if (item.type === 'anim') return <WaveAnim key={item.id} />
           if (item.type === 'lab') return <WaveLab key={item.id} />
@@ -388,6 +399,27 @@ function Leaders({ version }: { version: number }) {
         <line key={index} {...line} />
       ))}
     </svg>
+  )
+}
+
+function BoardSvg({
+  id,
+  svg,
+  caption,
+  intent,
+}: {
+  id: string
+  svg: string
+  caption?: string
+  intent?: string
+}) {
+  const safe = sanitizeBoardSvg(svg)
+  if (!safe) return null
+  return (
+    <figure className="board-svg" data-anchor={id} data-intent={intent || undefined}>
+      <div className="board-svg-canvas" dangerouslySetInnerHTML={{ __html: safe }} />
+      {caption ? <figcaption>{caption}</figcaption> : null}
+    </figure>
   )
 }
 

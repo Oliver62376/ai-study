@@ -8,17 +8,26 @@ enum WebLocalStorageBridge {
         lines.append(jsSetB64("ai-study-prefs-v1", jsonString(AppPreferencesStore.preferences) ?? "{}"))
         lines.append(jsSetB64("ai-study-stylus-v1", jsonString(StylusPreferencesStore.preferences) ?? "{}"))
         lines.append(jsSetB64("ai-study-custom-prompts-v1", jsonString(CustomPromptsStore.prompts) ?? "{}"))
+        if let memory = UserDefaults.standard.string(forKey: "ai-study-memory-v1"), !memory.isEmpty {
+            lines.append(jsSetB64("ai-study-memory-v1", memory))
+        }
         lines.append("localStorage.setItem('ai-study-grade-v1','\(GradeStore.grade.rawValue)');")
         lines.append("}catch(e){console.error('native storage bridge',e);}})();")
         return lines.joined()
     }
 
-    static func bootScript(topic: String, fileText: String) -> String {
-        let payload: [String: String] = [
+    static func bootScript(topic: String, fileText: String, lessonId: String, snapshotJSON: String?) -> String {
+        var payload: [String: Any] = [
             "topic": topic,
             "fileText": fileText,
+            "lessonId": lessonId,
         ]
-        guard let data = try? JSONEncoder().encode(payload),
+        if let snapshotJSON,
+           let data = snapshotJSON.data(using: .utf8),
+           let snap = try? JSONSerialization.jsonObject(with: data) {
+            payload["snapshot"] = snap
+        }
+        guard let data = try? JSONSerialization.data(withJSONObject: payload),
               let json = String(data: data, encoding: .utf8) else {
             return ""
         }

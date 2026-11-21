@@ -6,6 +6,8 @@ struct NativeLessonRecord: Identifiable, Codable, Hashable {
     var updatedAt: TimeInterval
     var topic: String
     var mode: HomeMode
+    /// 首次備課完成後由 Web 教室回寫的 JSON（與 Web `Persist` 對齊）
+    var snapshotJSON: String?
 }
 
 enum LessonStore {
@@ -20,22 +22,44 @@ enum LessonStore {
         return list.sorted { $0.updatedAt > $1.updatedAt }
     }
 
-    static func upsert(title: String, topic: String, mode: HomeMode) {
+    @discardableResult
+    static func register(id: String, title: String, topic: String, mode: HomeMode, snapshotJSON: String? = nil) -> String {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty else { return id }
         var list = load()
-        let id = list.first(where: { $0.title == trimmed })?.id ?? "L\(Int(Date().timeIntervalSince1970 * 1000))"
+        let prior = list.first(where: { $0.id == id })
         let record = NativeLessonRecord(
             id: id,
             title: trimmed,
             updatedAt: Date().timeIntervalSince1970,
             topic: topic,
-            mode: mode
+            mode: mode,
+            snapshotJSON: snapshotJSON ?? prior?.snapshotJSON
         )
         list.removeAll { $0.id == id }
         list.insert(record, at: 0)
         if list.count > maxCount { list = Array(list.prefix(maxCount)) }
         save(list)
+        return id
+    }
+
+    static func saveSnapshot(id: String, snapshotJSON: String) {
+        var list = load()
+        guard let idx = list.firstIndex(where: { $0.id == id }) else { return }
+        list[idx].snapshotJSON = snapshotJSON
+        list[idx].updatedAt = Date().timeIntervalSince1970
+        if let data = snapshotJSON.data(using: .utf8),
+           let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let course = root["course"] as? [String: Any],
+           let courseTitle = course["title"] as? String,
+           !courseTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            list[idx].title = courseTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        save(list)
+    }
+
+    static func record(id: String) -> NativeLessonRecord? {
+        load().first(where: { $0.id == id })
     }
 
     static func delete(id: String) {

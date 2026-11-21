@@ -68,8 +68,8 @@ struct HomeScreenView: View {
                 switch route {
                 case let .chat(seed, context):
                     ChatView(seed: seed, context: context)
-                case let .board(seed, context):
-                    WebClassroomView(seedTopic: seed, context: context)
+                case let .board(seed, context, lessonId):
+                    WebClassroomView(seedTopic: seed, context: context, lessonId: lessonId)
                 }
             }
             .onAppear { lessons = LessonStore.load() }
@@ -292,13 +292,14 @@ struct HomeScreenView: View {
         }
         busy = true
         let question = seed.isEmpty ? "請根據附件內容回答。" : seed
-        LessonStore.upsert(title: question, topic: context, mode: mode)
+        let lessonId = "L\(Int(Date().timeIntervalSince1970 * 1000))"
+        _ = LessonStore.register(id: lessonId, title: question, topic: context, mode: mode)
         lessons = LessonStore.load()
         switch mode {
         case .chat:
             path.append(HomeRoute.chat(seed: question, context: context))
         case .board:
-            path.append(HomeRoute.board(seed: question, context: context))
+            path.append(HomeRoute.board(seed: question, context: context, lessonId: lessonId))
         }
         topic = ""
         fileContext = ""
@@ -363,7 +364,7 @@ struct HomeScreenView: View {
         case .chat:
             path.append(HomeRoute.chat(seed: lesson.title, context: lesson.topic))
         case .board:
-            path.append(HomeRoute.board(seed: lesson.title, context: lesson.topic))
+            path.append(HomeRoute.board(seed: lesson.title, context: lesson.topic, lessonId: lesson.id))
         }
     }
 

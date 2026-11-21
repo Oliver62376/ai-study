@@ -44,6 +44,7 @@ import {
 } from './stylus-prefs'
 
 import { NotebookHomeSection } from './notebook-hub'
+import { MemoryBankPanel } from './memory-bank-ui'
 import { APP_VERSION } from './custom-prompts'
 import { gradeLabel, gradeOptions, loadGrade, saveGrade, type GradeId } from './profile'
 import {
@@ -335,7 +336,9 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   const [tokenTotals, setTokenTotals] = useState(() => loadTokenTotals())
   const [stylus, setStylus] = useState<StylusPreferences>(() => loadStylusPreferences())
   const [customPrompts, setCustomPrompts] = useState<CustomPrompts>(() => loadCustomPrompts())
-  const [settingsTab, setSettingsTab] = useState<'general' | 'model' | 'voice' | 'notebook' | 'pencil' | 'prompts'>('general')
+  const [settingsTab, setSettingsTab] = useState<
+    'general' | 'model' | 'voice' | 'notebook' | 'pencil' | 'prompts' | 'memory'
+  >('general')
   const current = optionFor(settings.provider)
   const provider = settings.provider
   const apiBase = settings.bases[provider]?.trim() ?? optionFor(provider).base ?? ''
@@ -452,6 +455,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
               ['notebook', '筆記'],
               ['pencil', 'Pencil'],
               ['prompts', '提示詞'],
+              ['memory', '記憶庫'],
             ] as const
           ).map(([id, label]) => (
             <button
@@ -479,6 +483,8 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
           </select>
         </section>
         )}
+
+        {settingsTab === 'memory' && <MemoryBankPanel />}
 
         {settingsTab === 'prompts' && (
         <section>

@@ -33,6 +33,14 @@ struct LessonsRailView: View {
         .liquidGlassBar(cornerRadius: 16)
     }
 
+    private func lessonMeta(_ lesson: NativeLessonRecord) -> String {
+        let mode = lesson.mode == .chat ? "Chat" : "白板"
+        if lesson.mode == .board, lesson.snapshotJSON != nil, !(lesson.snapshotJSON?.isEmpty ?? true) {
+            return "\(mode) · 可回放"
+        }
+        return mode
+    }
+
     private func lessonChip(_ lesson: NativeLessonRecord) -> some View {
         HStack(spacing: 6) {
             Button {
@@ -43,7 +51,7 @@ struct LessonsRailView: View {
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
-                    Text(lesson.mode == .chat ? "Chat" : "白板")
+                    Text(lessonMeta(lesson))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
