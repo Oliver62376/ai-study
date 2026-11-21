@@ -2,10 +2,9 @@ import SwiftUI
 
 // MARK: - 液態玻璃
 //
-// • 現在（iPadOS 17–18）：用 Material 模擬 Web 的 `.glass-composer` / `.glass-bar`
-// • 真·系統 Liquid Glass：需 iOS 26+ 執行，且專案以含 `glassEffect` 的 SDK 編譯（Xcode 26+）
-//   目前 GitHub CI 仍為 Xcode 16 / iOS 18 SDK，故無法連結 `glassEffect()`。
-//   CI 升級後只改此檔的 `glassBackground` 即可全 App 啟用。
+// • iPadOS 17–25：Material 模擬 Web 玻璃
+// • iPadOS 26+（含你說的 iPadOS 27 世代）：執行時啟用系統 `glassEffect`
+// • CI 已改用 macos-26 + Xcode 26 SDK 編譯
 
 enum LiquidGlassTokens {
     static let fill = Color.white.opacity(0.58)
@@ -49,18 +48,42 @@ private struct SimulatedGlassBackground: View {
     }
 }
 
+private struct SystemGlassBackground: View {
+    var cornerRadius: CGFloat
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        shape
+            .fill(.clear)
+            .glassEffect(.regular, in: shape)
+    }
+}
+
+private struct AdaptiveGlassBackground: View {
+    var cornerRadius: CGFloat
+    var elevated: Bool
+
+    var body: some View {
+        if #available(iOS 26.0, *) {
+            SystemGlassBackground(cornerRadius: cornerRadius)
+        } else {
+            SimulatedGlassBackground(cornerRadius: cornerRadius, elevated: elevated)
+        }
+    }
+}
+
 extension View {
     /// 工具列、小按鈕（對齊 Web `.glass-bar`）
     func liquidGlassBar(cornerRadius: CGFloat = 14) -> some View {
         background {
-            SimulatedGlassBackground(cornerRadius: cornerRadius, elevated: false)
+            AdaptiveGlassBackground(cornerRadius: cornerRadius, elevated: false)
         }
     }
 
     /// 首頁輸入框等大區塊（對齊 Web `.glass-composer`）
     func liquidGlassComposer(cornerRadius: CGFloat = 26) -> some View {
         background {
-            SimulatedGlassBackground(cornerRadius: cornerRadius, elevated: true)
+            AdaptiveGlassBackground(cornerRadius: cornerRadius, elevated: true)
         }
     }
 }

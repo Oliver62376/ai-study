@@ -8,6 +8,9 @@ struct HomeScreenView: View {
     @State private var mode: HomeMode = HomePreferencesStore.homeMode
     @State private var topic = ""
     @State private var fileContext = ""
+    @State private var attachedNames: [String] = []
+    @State private var importStatus = ""
+    @State private var importBusy = false
     @State private var importFiles = false
     @State private var showSettings = false
     @State private var showPomodoro = false
@@ -191,6 +194,10 @@ struct HomeScreenView: View {
                 .textFieldStyle(.plain)
                 .padding(.horizontal, 4)
 
+            if !attachedNames.isEmpty || !importStatus.isEmpty {
+                attachmentStatusStrip
+            }
+
             HStack(spacing: 8) {
                 Button { importFiles = true } label: {
                     Image(systemName: "paperclip")
@@ -295,7 +302,39 @@ struct HomeScreenView: View {
         }
         topic = ""
         fileContext = ""
+        attachedNames = []
+        importStatus = ""
         busy = false
+    }
+
+    private var attachmentStatusStrip: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if !attachedNames.isEmpty {
+                FlowLayout(spacing: 6) {
+                    ForEach(attachedNames, id: \.self) { name in
+                        Text(name)
+                            .font(.caption2.weight(.semibold))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.black.opacity(0.06))
+                            .clipShape(Capsule())
+                    }
+                }
+            }
+            if !importStatus.isEmpty {
+                HStack(spacing: 8) {
+                    if importBusy {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                    Text(importStatus)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(.horizontal, 4)
+        .padding(.top, 2)
     }
 
     private var lessonsInlineStrip: some View {
@@ -331,20 +370,63 @@ struct HomeScreenView: View {
     private func handleImport(_ result: Result<[URL], Error>) {
         switch result {
         case let .success(urls):
-            var chunks: [String] = []
-            for url in urls {
-                let access = url.startAccessingSecurityScopedResource()
-                defer { if access { url.stopAccessingSecurityScopedResource() } }
-                if url.pathExtension.lowercased() == "pdf" {
-                    chunks.append("【PDF】\(url.lastPathComponent)")
-                } else if let text = try? String(contentsOf: url, encoding: .utf8) {
-                    let clip = text.count > 1500 ? String(text.prefix(1500)) + "…" : text
-                    chunks.append("【\(url.lastPathComponent)】\n\(clip)")
+            guard !urls.isEmpty else { return }
+            let names = urls.map(\.lastPathComponent)
+            attachedNames.append(contentsOf: names)
+            importBusy = true
+            importStatus = "已加入 \(names.count) 個檔案…"
+            Task {
+                let ingest = await UploadIngestService.ingest(urls: urls) { status in
+                    importStatus = status
+                }
+                fileContext = ingest.text
+                importBusy = false
+                if fileContext.isEmpty {
+                    importStatus = "沒有讀到可用內容，請換檔案或調整設定中的上傳模式。"
+                } else {
+                    importStatus = "附件就緒，可以開始提問。"
                 }
             }
-            fileContext = chunks.joined(separator: "\n\n")
-        case .failure:
-            break
+        case let .failure(error):
+            importStatus = "讀檔失敗：\(error.localizedDescription)"
+            importBusy = false
         }
+    }
+}
+
+/// 簡易橫向換行 chip 列
+private struct FlowLayout: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let result = arrange(proposal: proposal, subviews: subviews)
+        return result.size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = arrange(proposal: proposal, subviews: subviews)
+        for (index, point) in result.positions.enumerated() where index < subviews.count {
+            subviews[index].place(at: CGPoint(x: bounds.minX + point.x, y: bounds.minY + point.y), proposal: .unspecified)
+        }
+    }
+
+    private func arrange(proposal: ProposedViewSize, subviews: Subviews) -> (size: CGSize, positions: [CGPoint]) {
+        let maxWidth = proposal.width ?? .infinity
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var positions: [CGPoint] = []
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x + size.width > maxWidth, x > 0 {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            positions.append(CGPoint(x: x, y: y))
+            rowHeight = max(rowHeight, size.height)
+            x += size.width + spacing
+        }
+        return (CGSize(width: maxWidth, height: y + rowHeight), positions)
     }
 }

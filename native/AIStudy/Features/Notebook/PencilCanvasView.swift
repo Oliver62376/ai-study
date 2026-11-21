@@ -9,7 +9,7 @@ struct PencilCanvasView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> PKCanvasView {
         let view = PKCanvasView()
-        view.drawingPolicy = .pencilOnly
+        view.drawingPolicy = StylusPreferencesStore.preferences.pencilOnly ? .pencilOnly : .anyInput
         view.backgroundColor = .clear
         view.isOpaque = false
         view.tool = tool ?? PKInkingTool(.pen, color: .black, width: 3)
@@ -25,6 +25,7 @@ struct PencilCanvasView: UIViewRepresentable {
         if uiView.drawing.dataRepresentation() != drawing.dataRepresentation() {
             uiView.drawing = drawing
         }
+        uiView.drawingPolicy = StylusPreferencesStore.preferences.pencilOnly ? .pencilOnly : .anyInput
         if inkInteractionEnabled, let tool {
             uiView.tool = tool
         }

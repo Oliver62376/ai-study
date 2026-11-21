@@ -1,4 +1,6 @@
+import AVFAudio
 import SwiftUI
+import UniformTypeIdentifiers
 
 private enum SettingsTab: String, CaseIterable, Identifiable {
     case general, model, voice, notebook, pencil, prompts
@@ -24,9 +26,20 @@ struct SettingsView: View {
     @State private var savedFlash = false
     @State private var grade = GradeStore.grade
     @State private var pomodoro = PomodoroSettingsStore.settings
+    @State private var prefs = AppPreferencesStore.preferences
+    @State private var stylus = StylusPreferencesStore.preferences
+    @State private var customPrompts = CustomPromptsStore.prompts
     @State private var showPomodoroSheet = false
+    @State private var promptImportSlot: PromptSlot?
+    @State private var showPromptImport = false
 
     private var current: ProviderId { providers.activeProvider }
+    private var voices: [(id: String, label: String)] {
+        AVSpeechSynthesisVoice.speechVoices()
+            .filter { $0.language.hasPrefix("zh") || $0.language.hasPrefix("en") }
+            .map { ($0.identifier, "\($0.name) · \($0.language)") }
+            .sorted { $0.label < $1.label }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -36,34 +49,55 @@ struct SettingsView: View {
                 }
             }
             .pickerStyle(.segmented)
-            .padding()
+            .padding(.horizontal)
+            .padding(.top, 8)
+            .padding(.bottom, 4)
 
-            Form {
+            List {
                 switch tab {
                 case .general:
                     generalTab
                 case .model:
                     modelTab
                 case .voice:
-                    placeholderTab("語音", "語速、音調與 TTS 音色（對齊 Web 語音分頁）。")
+                    voiceTab
                 case .notebook:
-                    placeholderTab("筆記", "換頁方式與筆記相關偏好。")
+                    notebookTab
                 case .pencil:
-                    placeholderTab("Apple Pencil", "防手掌、側鍵映射與筆壓選項。")
+                    pencilTab
                 case .prompts:
-                    placeholderTab("提示詞", "可匯入 txt 的各場景自訂提示詞。")
+                    promptsTab
                 }
             }
+            .listStyle(.insetGrouped)
         }
         .navigationTitle("設定")
-        .onDisappear {
-            TrashRetentionStore.retentionDays = trashDays
-            GradeStore.grade = grade
-            PomodoroSettingsStore.settings = pomodoro
-        }
+        .navigationBarTitleDisplayMode(.inline)
+        .onDisappear { persistAll() }
         .sheet(isPresented: $showPomodoroSheet) {
             PomodoroView()
         }
+        .fileImporter(
+            isPresented: $showPromptImport,
+            allowedContentTypes: [.plainText, .utf8PlainText, .text],
+            allowsMultipleSelection: false
+        ) { result in
+            guard let slot = promptImportSlot else { return }
+            if case let .success(urls) = result, let url = urls.first,
+               let text = try? String(contentsOf: url, encoding: .utf8) {
+                customPrompts[slot] = text
+            }
+            promptImportSlot = nil
+        }
+    }
+
+  private func persistAll() {
+        TrashRetentionStore.retentionDays = trashDays
+        GradeStore.grade = grade
+        PomodoroSettingsStore.settings = pomodoro
+        AppPreferencesStore.preferences = prefs
+        StylusPreferencesStore.preferences = stylus
+        CustomPromptsStore.prompts = customPrompts
     }
 
     @ViewBuilder
@@ -72,6 +106,13 @@ struct SettingsView: View {
             Picker("年級", selection: $grade) {
                 ForEach(GradeId.allCases) { item in
                     Text(item.label).tag(item)
+                }
+            }
+        }
+        Section("檔案上傳") {
+            Picker("處理方式", selection: $prefs.uploadMode) {
+                ForEach(UploadMode.allCases) { mode in
+                    Text(mode.label).tag(mode)
                 }
             }
         }
@@ -88,8 +129,8 @@ struct SettingsView: View {
             }
         }
         Section("關於") {
-            LabeledContent("版本", value: "0.2.9-beta")
-            LabeledContent("平台", value: "iPadOS 17+")
+            LabeledContent("版本", value: "0.3.0-beta")
+            LabeledContent("平台", value: "iPadOS 17+ · 26+ 系統液態玻璃")
         }
     }
 
@@ -102,38 +143,17 @@ struct SettingsView: View {
         }
 
         Section("供應商") {
-            ForEach(ProviderId.allCases) { provider in
-                Button {
-                    providers.activeProvider = provider
-                } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack(spacing: 6) {
-                                Text(provider.title)
-                                    .font(.headline)
-                                if provider.isRequired {
-                                    Text("必備")
-                                        .font(.caption2)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(Color.orange.opacity(0.2))
-                                        .clipShape(Capsule())
-                                }
-                            }
-                            if providers.activeProvider == provider {
-                                Text(provider.hint)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        Spacer()
-                        if providers.activeProvider == provider {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(Color.accentColor)
-                        }
-                    }
+            Picker("使用中的供應商", selection: $providers.activeProvider) {
+                ForEach(ProviderId.allCases) { provider in
+                    Text(provider.title).tag(provider)
                 }
-                .buttonStyle(.plain)
+            }
+            ForEach(ProviderId.allCases) { provider in
+                if provider.isRequired {
+                    Label("\(provider.title) 為必備", systemImage: "exclamationmark.circle")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
 
@@ -161,7 +181,7 @@ struct SettingsView: View {
                 Text("已儲存")
                     .foregroundStyle(.green)
             }
-            Button("儲存設定") {
+            Button("儲存模型設定") {
                 providers.persist()
                 savedFlash = true
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { savedFlash = false }
@@ -169,11 +189,106 @@ struct SettingsView: View {
         }
     }
 
-    private func placeholderTab(_ title: String, _ detail: String) -> some View {
-        Section(title) {
-            Text(detail)
+    @ViewBuilder
+    private var voiceTab: some View {
+        Section {
+            Text("語速、音調與 TTS 音色（與 Web 語音分頁對齊）。")
+                .font(.footnote)
                 .foregroundStyle(.secondary)
         }
+        Section("語音") {
+            LabeledContent("語速", value: String(format: "%.2f", prefs.ttsRate))
+            Slider(value: $prefs.ttsRate, in: 0.7 ... 1.2, step: 0.02)
+            LabeledContent("音調", value: String(format: "%.2f", prefs.ttsPitch))
+            Slider(value: $prefs.ttsPitch, in: 0.8 ... 1.2, step: 0.02)
+            Picker("音色", selection: $prefs.ttsVoice) {
+                Text("系統預設").tag("")
+                ForEach(voices, id: \.id) { voice in
+                    Text(voice.label).tag(voice.id)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var notebookTab: some View {
+        Section {
+            Text("筆記換頁與捲動偏好。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        Section("筆記換頁方式") {
+            Picker("捲動換頁", selection: $prefs.notebookPageNav) {
+                ForEach(NotebookPageNav.allCases) { nav in
+                    Text(nav.label).tag(nav)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var pencilTab: some View {
+        Section {
+            Text("筆記本與白板適用。Pencil 透過 pointerType「pen」識別。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        Section("Apple Pencil 與防手掌") {
+            Toggle("防手掌誤觸", isOn: $stylus.palmRejection)
+            Stepper("筆離開後保護 \(stylus.palmRejectionMs) ms", value: $stylus.palmRejectionMs, in: 200 ... 1200, step: 50)
+                .disabled(!stylus.palmRejection)
+            Toggle("僅 Apple Pencil 可書寫", isOn: $stylus.pencilOnly)
+            Toggle("依壓感調整筆粗", isOn: $stylus.pressure)
+        }
+        Section("側鍵與手勢") {
+            stylusPicker("側鍵 1", selection: $stylus.barrelButton1)
+            stylusPicker("側鍵 2", selection: $stylus.barrelButton2)
+            stylusPicker("輕點兩下", selection: $stylus.doubleTap)
+            stylusPicker("筆尾橡皮擦", selection: $stylus.eraserEnd)
+            Button("還原 Pencil 預設") {
+                stylus = .default
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func stylusPicker(_ title: String, selection: Binding<StylusAction>) -> some View {
+        Picker(title, selection: selection) {
+            ForEach(StylusAction.allCases) { action in
+                Text(action.label).tag(action)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var promptsTab: some View {
+        Section {
+            Text("白板 JSON 工具格式永遠由 App 內建。留空則只用內建規則。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        ForEach(PromptSlot.allCases) { slot in
+            Section(slot.label) {
+                TextEditor(text: bindingPrompt(slot))
+                    .frame(minHeight: 88)
+                Button("匯入 .txt") {
+                    promptImportSlot = slot
+                    showPromptImport = true
+                }
+            }
+        }
+        Section {
+            Button("清空自訂提示詞", role: .destructive) {
+                customPrompts = .default
+            }
+        }
+    }
+
+    private func bindingPrompt(_ slot: PromptSlot) -> Binding<String> {
+        Binding(
+            get: { customPrompts[slot] },
+            set: { customPrompts[slot] = $0 }
+        )
     }
 
     private func bindingKey(_ provider: ProviderId) -> Binding<String> {

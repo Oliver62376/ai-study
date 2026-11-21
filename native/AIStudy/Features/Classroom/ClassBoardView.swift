@@ -48,10 +48,11 @@ struct ClassBoardView: View {
     private func generatePlan() async {
         loading = true
         defer { loading = false }
-        let system = """
+        var system = """
         你是白板老師。依學生程度與主題，列出 5 個教學步驟與板書重點。用繁體中文，不要用 Markdown。
         \(GradeStore.promptLabel)
         """
+        system = CustomPromptsStore.appendExtra(system, slot: .plan)
         do {
             planText = try await ProviderAIService.ask(
                 question: seedTopic,
