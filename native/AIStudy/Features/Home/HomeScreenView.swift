@@ -69,7 +69,7 @@ struct HomeScreenView: View {
                 case let .chat(seed, context):
                     ChatView(seed: seed, context: context)
                 case let .board(seed, context):
-                    ClassBoardView(seedTopic: seed, context: context)
+                    WebClassroomView(seedTopic: seed, context: context)
                 }
             }
             .onAppear { lessons = LessonStore.load() }

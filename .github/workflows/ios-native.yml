@@ -17,6 +17,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build Web classroom bundle
+        run: |
+          npm ci
+          npm run build:native-web
+
       - name: Read native version and channel
         id: meta
         run: |

@@ -33,6 +33,7 @@ import {
 } from './icons'
 import { HomeScreen, SettingsScreen } from './shell'
 import { listen, speak } from './speech'
+import { consumeNativeClassBoot } from './native-bridge'
 
 const fast = new URLSearchParams(window.location.search).has('fast')
 
@@ -412,6 +413,13 @@ export default function App() {
     if (state.phase === 'paused') dispatch({ type: 'resume', at: at() })
     else if (state.phase === 'ready' && !state.finished) play()
   }
+
+  useEffect(() => {
+    const boot = consumeNativeClassBoot()
+    if (!boot) return
+    visionRef.current = boot.vision ?? []
+    void onPlan(boot.topic, boot.fileText, visionRef.current)
+  }, [])
 
   function beginResize(event: ReactPointerEvent<HTMLDivElement>) {
     const startX = event.clientX
