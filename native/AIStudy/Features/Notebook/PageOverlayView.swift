@@ -43,11 +43,13 @@ struct PageOverlayView: View {
         .frame(width: sheetSize.width, height: sheetSize.height)
         .contentShape(Rectangle())
         .gesture(shapeGesture)
-        .spatialTapGesture { event in
-            if toolKind == .text {
-                onTapForText(event.location)
-            }
-        }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onEnded { value in
+                    guard toolKind == .text else { return }
+                    onTapForText(value.location)
+                }
+        )
     }
 
     private var shapeGesture: some Gesture {
