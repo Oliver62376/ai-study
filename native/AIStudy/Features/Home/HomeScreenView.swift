@@ -208,7 +208,7 @@ struct HomeScreenView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .frame(maxWidth: 760)
-        .liquidGlassBar(cornerRadius: 26)
+        .liquidGlassComposer(cornerRadius: 26)
     }
 
     private var shortModel: String {
