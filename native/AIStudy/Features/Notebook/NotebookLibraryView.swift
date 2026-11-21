@@ -6,13 +6,16 @@ struct NotebookLibraryView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \Notebook.updatedAt, order: .reverse) private var notebooks: [Notebook]
 
+    @State private var path = NavigationPath()
     @State private var importPDF = false
     @State private var importError = ""
     @State private var showError = false
     @State private var showSettings = false
+    @State private var bookToDelete: Notebook?
+    @State private var showDeleteConfirm = false
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             Group {
                 if notebooks.isEmpty {
                     emptyState
@@ -20,12 +23,22 @@ struct NotebookLibraryView: View {
                     ScrollView {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 168), spacing: 16)], spacing: 16) {
                             ForEach(notebooks) { book in
-                                NavigationLink {
-                                    NotebookEditorView(notebook: book)
+                                Button {
+                                    path.append(book.id)
                                 } label: {
                                     notebookCard(book)
                                 }
                                 .buttonStyle(.plain)
+                                .contextMenu {
+                                    Button("刪除筆記本", systemImage: "trash", role: .destructive) {
+                                        bookToDelete = book
+                                        showDeleteConfirm = true
+                                    }
+                                }
+                                .onLongPressGesture(minimumDuration: 0.5) {
+                                    bookToDelete = book
+                                    showDeleteConfirm = true
+                                }
                             }
                         }
                         .padding(20)
@@ -34,6 +47,11 @@ struct NotebookLibraryView: View {
             }
             .background(Color(.systemGroupedBackground))
             .navigationTitle("我的筆記")
+            .navigationDestination(for: String.self) { bookId in
+                if let book = notebooks.first(where: { $0.id == bookId }) {
+                    NotebookEditorView(notebook: book)
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
@@ -65,28 +83,25 @@ struct NotebookLibraryView: View {
             }
         }
         .fileImporter(isPresented: $importPDF, allowedContentTypes: [.pdf], allowsMultipleSelection: false) { result in
-            switch result {
-            case let .success(urls):
-                guard let url = urls.first else { return }
-                do {
-                    let book = try Notebook.makeFromPDF(at: url, in: context)
-                    for page in book.pages {
-                        PageThumbnailRenderer.refreshThumbnail(page: page)
-                    }
-                    try? context.save()
-                } catch {
-                    importError = error.localizedDescription
-                    showError = true
-                }
-            case let .failure(error):
-                importError = error.localizedDescription
-                showError = true
-            }
+            handleImport(result)
         }
         .alert("匯入失敗", isPresented: $showError) {
             Button("好", role: .cancel) {}
         } message: {
             Text(importError)
+        }
+        .alert("刪除筆記本？", isPresented: $showDeleteConfirm) {
+            Button("刪除", role: .destructive) {
+                if let book = bookToDelete {
+                    deleteBook(book)
+                }
+                bookToDelete = nil
+            }
+            Button("取消", role: .cancel) { bookToDelete = nil }
+        } message: {
+            if let book = bookToDelete {
+                Text("「\(book.title)」及其 \(book.pages.count) 頁將永久刪除。")
+            }
         }
     }
 
@@ -138,5 +153,30 @@ struct NotebookLibraryView: View {
 
     private func createBook() {
         _ = Notebook.makeDefault(in: context)
+    }
+
+    private func deleteBook(_ book: Notebook) {
+        context.delete(book)
+        try? context.save()
+    }
+
+    private func handleImport(_ result: Result<[URL], Error>) {
+        switch result {
+        case let .success(urls):
+            guard let url = urls.first else { return }
+            do {
+                let book = try Notebook.makeFromPDF(at: url, in: context)
+                for page in book.pages {
+                    PageThumbnailRenderer.refreshThumbnail(page: page)
+                }
+                try? context.save()
+            } catch {
+                importError = error.localizedDescription
+                showError = true
+            }
+        case let .failure(error):
+            importError = error.localizedDescription
+            showError = true
+        }
     }
 }

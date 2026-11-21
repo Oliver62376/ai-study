@@ -27,6 +27,7 @@ final class NotePage {
     var pkDrawingData: Data?
     var backgroundImageData: Data?
     var thumbnailJPEGData: Data?
+    var overlaysJSON: Data?
     var notebook: Notebook?
 
     init(
@@ -36,7 +37,8 @@ final class NotePage {
         updatedAt: Date = .now,
         pkDrawingData: Data? = nil,
         backgroundImageData: Data? = nil,
-        thumbnailJPEGData: Data? = nil
+        thumbnailJPEGData: Data? = nil,
+        overlaysJSON: Data? = nil
     ) {
         self.id = id
         self.title = title
@@ -45,6 +47,12 @@ final class NotePage {
         self.pkDrawingData = pkDrawingData
         self.backgroundImageData = backgroundImageData
         self.thumbnailJPEGData = thumbnailJPEGData
+        self.overlaysJSON = overlaysJSON
+    }
+
+    var overlays: PageOverlays {
+        get { PageOverlays.decode(from: overlaysJSON) }
+        set { overlaysJSON = newValue.encode() }
     }
 }
 

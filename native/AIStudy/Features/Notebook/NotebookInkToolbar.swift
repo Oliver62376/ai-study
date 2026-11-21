@@ -1,4 +1,5 @@
 import PencilKit
+import PhotosUI
 import SwiftUI
 
 struct NotebookInkToolbar: View {
@@ -6,8 +7,9 @@ struct NotebookInkToolbar: View {
     @Bindable var appearance: ToolbarAppearanceStore
     var onUndo: () -> Void
     var onRedo: () -> Void
-    var onUnimplemented: (String) -> Void
-  var onToolbarDoubleTap: () -> Void
+    var onPickImage: () -> Void
+    var onAttachMaterial: () -> Void
+    var onToolbarDoubleTap: () -> Void
 
     private let swatches: [Color] = [
         Color(hex: "#1c1c1e"), Color(hex: "#c41e1e"), Color(hex: "#1b4fd8"), Color(hex: "#17803d"),
@@ -25,19 +27,32 @@ struct NotebookInkToolbar: View {
 
                 toolIcon(.shapes) {
                     closePanels()
-                    onUnimplemented("圖形工具")
+                    if state.inkKind == .shape {
+                        state.showShapePanel.toggle()
+                    } else {
+                        state.inkKind = .shape
+                        state.showShapePanel = true
+                    }
+                    state.showPenSizePanel = false
+                    state.showEraserSizePanel = false
                 }
                 eraserTool
 
-                toolIcon(.lasso) { closePanels(); onUnimplemented("套索選取") }
-                toolIcon(.text) { closePanels(); onUnimplemented("文字方塊") }
+                toolIcon(.lasso) {
+                    closePanels()
+                    state.inkKind = .lasso
+                }
+                toolIcon(.text) {
+                    closePanels()
+                    state.inkKind = .text
+                }
 
                 Divider().frame(height: 36).padding(.horizontal, 4)
 
                 toolIcon(.undo, label: false, action: onUndo)
                 toolIcon(.redo, label: false, action: onRedo)
-                toolIcon(.image) { closePanels(); onUnimplemented("插入圖片") }
-                toolIcon(.materials) { closePanels(); onUnimplemented("教材附件") }
+                toolIcon(.image) { closePanels(); onPickImage() }
+                toolIcon(.materials) { closePanels(); onAttachMaterial() }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
@@ -64,10 +79,12 @@ struct NotebookInkToolbar: View {
             if state.inkKind == kind {
                 state.showPenSizePanel.toggle()
                 state.showEraserSizePanel = false
+                state.showShapePanel = false
             } else {
                 state.inkKind = kind
                 state.showPenSizePanel = false
                 state.showEraserSizePanel = false
+                state.showShapePanel = false
             }
         }
     }
@@ -80,6 +97,7 @@ struct NotebookInkToolbar: View {
                 state.inkKind = .eraser
                 state.showEraserSizePanel = false
                 state.showPenSizePanel = false
+                state.showShapePanel = false
             }
         }
     }
@@ -113,7 +131,7 @@ struct NotebookInkToolbar: View {
     private func toolIcon(_ icon: NotebookIcons, label: Bool = true, action: @escaping () -> Void) -> some View {
         Group {
             if label {
-                NotebookIconTool(icon: icon, action: action)
+                NotebookIconTool(icon: icon, active: isActive(icon), action: action)
             } else {
                 Button(action: action) {
                     NotebookGlyph(icon: icon)
@@ -121,6 +139,15 @@ struct NotebookInkToolbar: View {
                 }
                 .buttonStyle(.plain)
             }
+        }
+    }
+
+    private func isActive(_ icon: NotebookIcons) -> Bool {
+        switch icon {
+        case .shapes: state.inkKind == .shape
+        case .lasso: state.inkKind == .lasso
+        case .text: state.inkKind == .text
+        default: false
         }
     }
 }
@@ -168,9 +195,33 @@ struct InkToolFloatingPanels: View {
                 .padding(.leading, 200)
                 .padding(.top, 8)
             }
+
+            if state.showShapePanel {
+                VStack(alignment: .leading, spacing: 10) {
+                    Picker("圖形", selection: $state.shapeKind) {
+                        Text("直線").tag(ShapeKind.line)
+                        Text("矩形").tag(ShapeKind.rect)
+                        Text("橢圓").tag(ShapeKind.ellipse)
+                    }
+                    .pickerStyle(.segmented)
+                    ToolWidthPopover(
+                        title: "線條粗細",
+                        width: $state.shapeStroke,
+                        range: 1...16,
+                        previewColor: state.inkColor
+                    )
+                }
+                .padding(12)
+                .frame(width: 240)
+                .background(.regularMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .shadow(radius: 12)
+                .padding(.leading, 320)
+                .padding(.top, 8)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .allowsHitTesting(state.showPenSizePanel || state.showEraserSizePanel)
+        .allowsHitTesting(state.showPenSizePanel || state.showEraserSizePanel || state.showShapePanel)
     }
 
     private var isPenFamily: Bool {

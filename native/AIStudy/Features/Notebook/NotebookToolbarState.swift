@@ -26,6 +26,15 @@ final class NotebookToolbarState {
     var showPenSizePanel = false
     var showEraserSizePanel = false
     var showShapePanel = false
+    var shapeKind: ShapeKind = .line
+    var shapeStroke: CGFloat = 3
+
+    var allowsInkOnCanvas: Bool {
+        switch inkKind {
+        case .shape, .text: false
+        default: true
+        }
+    }
 
     func pkTool() -> PKTool {
         switch inkKind {
@@ -45,8 +54,10 @@ final class NotebookToolbarState {
             case .stroke:
                 return strokeEraser(width: eraserWidth)
             }
-        default:
-            return PKInkingTool(.pen, color: UIColor(inkColor), width: inkWidth)
+        case .lasso:
+            return PKLassoTool()
+        case .shape, .text:
+            return PKInkingTool(.pen, color: .clear, width: 1)
         }
     }
 

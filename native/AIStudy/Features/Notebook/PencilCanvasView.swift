@@ -4,6 +4,7 @@ import SwiftUI
 struct PencilCanvasView: UIViewRepresentable {
     @Binding var drawing: PKDrawing
     var tool: PKTool?
+    var allowsDrawing: Bool = true
     var onCanvasReady: ((PKCanvasView) -> Void)? = nil
 
     func makeUIView(context: Context) -> PKCanvasView {
@@ -12,6 +13,7 @@ struct PencilCanvasView: UIViewRepresentable {
         view.backgroundColor = .clear
         view.isOpaque = false
         view.tool = tool ?? PKInkingTool(.pen, color: .black, width: 3)
+        view.isUserInteractionEnabled = allowsDrawing
         view.delegate = context.coordinator
         DispatchQueue.main.async {
             onCanvasReady?(view)
@@ -26,6 +28,8 @@ struct PencilCanvasView: UIViewRepresentable {
         if let tool {
             uiView.tool = tool
         }
+        uiView.isUserInteractionEnabled = allowsDrawing
+        uiView.alpha = allowsDrawing ? 1 : 0.01
     }
 
     func makeCoordinator() -> Coordinator {
