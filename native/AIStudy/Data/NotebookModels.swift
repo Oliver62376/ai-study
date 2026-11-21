@@ -26,6 +26,7 @@ final class NotePage {
     /// Serialized `PKDrawing` from PencilKit.
     var pkDrawingData: Data?
     var backgroundImageData: Data?
+    var thumbnailJPEGData: Data?
     var notebook: Notebook?
 
     init(
@@ -34,7 +35,8 @@ final class NotePage {
         sortIndex: Int,
         updatedAt: Date = .now,
         pkDrawingData: Data? = nil,
-        backgroundImageData: Data? = nil
+        backgroundImageData: Data? = nil,
+        thumbnailJPEGData: Data? = nil
     ) {
         self.id = id
         self.title = title
@@ -42,6 +44,7 @@ final class NotePage {
         self.updatedAt = updatedAt
         self.pkDrawingData = pkDrawingData
         self.backgroundImageData = backgroundImageData
+        self.thumbnailJPEGData = thumbnailJPEGData
     }
 }
 

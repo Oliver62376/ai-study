@@ -22,6 +22,11 @@
 		A1000001000000000000000D /* PDFImportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000E /* PDFImportService.swift */; };
 		A1000001000000000000000E /* NotebookPDFExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000F /* NotebookPDFExport.swift */; };
 		A1000001000000000000000F /* NotebookTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000010 /* NotebookTheme.swift */; };
+		A10000010000000000000010 /* PageThumbnailRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000011 /* PageThumbnailRenderer.swift */; };
+		A10000010000000000000011 /* NotebookToolbarState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000012 /* NotebookToolbarState.swift */; };
+		A10000010000000000000012 /* ToolWidthPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000013 /* ToolWidthPopover.swift */; };
+		A10000010000000000000013 /* NotebookIcons.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000014 /* NotebookIcons.swift */; };
+		A10000010000000000000014 /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000015 /* Color+Hex.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -42,6 +47,11 @@
 		A2000001000000000000000E /* PDFImportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFImportService.swift; sourceTree = "<group>"; };
 		A2000001000000000000000F /* NotebookPDFExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookPDFExport.swift; sourceTree = "<group>"; };
 		A20000010000000000000010 /* NotebookTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookTheme.swift; sourceTree = "<group>"; };
+		A20000010000000000000011 /* PageThumbnailRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageThumbnailRenderer.swift; sourceTree = "<group>"; };
+		A20000010000000000000012 /* NotebookToolbarState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookToolbarState.swift; sourceTree = "<group>"; };
+		A20000010000000000000013 /* ToolWidthPopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolWidthPopover.swift; sourceTree = "<group>"; };
+		A20000010000000000000014 /* NotebookIcons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookIcons.swift; sourceTree = "<group>"; };
+		A20000010000000000000015 /* Color+Hex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Color+Hex.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -129,6 +139,8 @@
 				A2000001000000000000000B /* NotebookPageSheetView.swift */,
 				A2000001000000000000000C /* NotebookInkToolbar.swift */,
 				A2000001000000000000000D /* PageManagerSheet.swift */,
+				A20000010000000000000012 /* NotebookToolbarState.swift */,
+				A20000010000000000000013 /* ToolWidthPopover.swift */,
 			);
 			path = Notebook;
 			sourceTree = "<group>";
@@ -138,6 +150,7 @@
 			children = (
 				A2000001000000000000000E /* PDFImportService.swift */,
 				A2000001000000000000000F /* NotebookPDFExport.swift */,
+				A20000010000000000000011 /* PageThumbnailRenderer.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -146,6 +159,8 @@
 			isa = PBXGroup;
 			children = (
 				A20000010000000000000010 /* NotebookTheme.swift */,
+				A20000010000000000000014 /* NotebookIcons.swift */,
+				A20000010000000000000015 /* Color+Hex.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -241,6 +256,11 @@
 				A1000001000000000000000D /* PDFImportService.swift in Sources */,
 				A1000001000000000000000E /* NotebookPDFExport.swift in Sources */,
 				A1000001000000000000000F /* NotebookTheme.swift in Sources */,
+				A10000010000000000000010 /* PageThumbnailRenderer.swift in Sources */,
+				A10000010000000000000011 /* NotebookToolbarState.swift in Sources */,
+				A10000010000000000000012 /* ToolWidthPopover.swift in Sources */,
+				A10000010000000000000013 /* NotebookIcons.swift in Sources */,
+				A10000010000000000000014 /* Color+Hex.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -292,7 +312,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.2.0;
+				MARKETING_VERSION = 0.2.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.oliver62376.aistudy.native;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -317,7 +337,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.2.0;
+				MARKETING_VERSION = 0.2.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.oliver62376.aistudy.native;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

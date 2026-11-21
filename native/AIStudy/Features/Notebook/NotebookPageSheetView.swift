@@ -70,6 +70,7 @@ struct NotebookPageSheetView: View {
         page.pkDrawingData = drawing.dataRepresentation()
         page.updatedAt = .now
         page.notebook?.updatedAt = .now
+        PageThumbnailRenderer.refreshThumbnail(page: page)
         try? context.save()
     }
 }

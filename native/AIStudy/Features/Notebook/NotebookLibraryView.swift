@@ -9,6 +9,7 @@ struct NotebookLibraryView: View {
     @State private var importPDF = false
     @State private var importError = ""
     @State private var showError = false
+    @State private var showSettings = false
 
     var body: some View {
         NavigationStack {
@@ -17,7 +18,7 @@ struct NotebookLibraryView: View {
                     emptyState
                 } else {
                     ScrollView {
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 16)], spacing: 16) {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 168), spacing: 16)], spacing: 16) {
                             ForEach(notebooks) { book in
                                 NavigationLink {
                                     NotebookEditorView(notebook: book)
@@ -36,13 +37,31 @@ struct NotebookLibraryView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Button("新筆記本") { createBook() }
-                        Button("從 PDF 建立") { importPDF = true }
+                        Button("新筆記本", systemImage: "square.and.pencil") { createBook() }
+                        Button("從 PDF 建立", systemImage: "doc.richtext") { importPDF = true }
                     } label: {
                         Image(systemName: "plus.circle.fill")
                             .symbolRenderingMode(.hierarchical)
                     }
                 }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showSettings = true
+                    } label: {
+                        Image(systemName: NotebookIcons.settings.systemName)
+                    }
+                    .accessibilityLabel(NotebookIcons.settings.label)
+                }
+            }
+        }
+        .sheet(isPresented: $showSettings) {
+            NavigationStack {
+                SettingsView()
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("完成") { showSettings = false }
+                        }
+                    }
             }
         }
         .fileImporter(isPresented: $importPDF, allowedContentTypes: [.pdf], allowsMultipleSelection: false) { result in
@@ -50,7 +69,11 @@ struct NotebookLibraryView: View {
             case let .success(urls):
                 guard let url = urls.first else { return }
                 do {
-                    _ = try Notebook.makeFromPDF(at: url, in: context)
+                    let book = try Notebook.makeFromPDF(at: url, in: context)
+                    for page in book.pages {
+                        PageThumbnailRenderer.refreshThumbnail(page: page)
+                    }
+                    try? context.save()
                 } catch {
                     importError = error.localizedDescription
                     showError = true
@@ -80,16 +103,26 @@ struct NotebookLibraryView: View {
     }
 
     private func notebookCard(_ book: Notebook) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(NotebookTheme.paper)
-                .frame(height: 140)
-                .overlay {
-                    Image(systemName: "pencil.and.scribble")
-                        .font(.largeTitle)
-                        .foregroundStyle(NotebookTheme.header.opacity(0.5))
+        let cover = book.pages.sorted { $0.sortIndex < $1.sortIndex }.first
+        return VStack(alignment: .leading, spacing: 8) {
+            Group {
+                if let cover, let image = PageThumbnailRenderer.render(page: cover, targetWidth: 220) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    NotebookTheme.paper
+                        .overlay {
+                            Image(systemName: "pencil.and.scribble")
+                                .font(.title)
+                                .foregroundStyle(NotebookTheme.header.opacity(0.35))
+                        }
                 }
-                .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
+            }
+            .frame(height: 150)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .shadow(color: .black.opacity(0.1), radius: 6, y: 3)
+
             Text(book.title)
                 .font(.headline)
                 .lineLimit(2)
@@ -98,7 +131,7 @@ struct NotebookLibraryView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        .padding(14)
+        .padding(12)
         .background(Color(.secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }

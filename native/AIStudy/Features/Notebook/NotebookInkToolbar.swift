@@ -2,77 +2,161 @@ import PencilKit
 import SwiftUI
 
 struct NotebookInkToolbar: View {
-    @Binding var inkColor: Color
-    @Binding var inkWidth: CGFloat
-    @Binding var eraserOn: Bool
+    @Bindable var state: NotebookToolbarState
+    var onUndo: () -> Void
+    var onRedo: () -> Void
+    var onUnimplemented: (String) -> Void
 
     private let swatches: [Color] = [
-        .black, .red, .blue, .green, .orange, .yellow, .pink, .cyan, .white,
+        Color(hex: "#1c1c1e"), Color(hex: "#c41e1e"), Color(hex: "#1b4fd8"), Color(hex: "#17803d"),
+        Color(hex: "#6b3fa0"), Color(hex: "#f4a100"), Color(hex: "#e91e8c"), Color(hex: "#0e8a8a"), Color(hex: "#ffffff"),
     ]
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                toolButton("筆", on: !eraserOn) { eraserOn = false }
-                toolButton("橡皮", on: eraserOn) { eraserOn = true }
-
-                Divider().frame(height: 28)
-
-                ForEach(swatches.indices, id: \.self) { index in
-                    let color = swatches[index]
-                    Button {
-                        inkColor = color
-                        eraserOn = false
-                    } label: {
-                        Circle()
-                            .fill(color)
-                            .frame(width: 28, height: 28)
-                            .overlay {
-                                Circle().stroke(inkColor == color ? Color.accentColor : Color.gray.opacity(0.35), lineWidth: 2)
-                            }
-                    }
-                    .buttonStyle(.plain)
-                }
-
+        ZStack(alignment: .topLeading) {
+            ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 4) {
-                    Text("粗細")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Stepper(value: $inkWidth, in: 1...24, step: 1) {
-                        Text("\(Int(inkWidth))")
-                            .font(.caption.monospacedDigit())
-                            .frame(width: 24)
+                    penTool(.pen, icon: .pen)
+                    penTool(.fountain, icon: .fountain)
+                    penTool(.highlighter, icon: .highlighter)
+
+                    colorRow
+
+                    toolIcon(.shapes) {
+                        state.showShapePanel.toggle()
+                        state.showPenSizePanel = false
+                        state.showEraserSizePanel = false
+                        onUnimplemented("圖形工具")
                     }
-                    .labelsHidden()
+                    eraserTool
+
+                    toolIcon(.lasso) { onUnimplemented("套索選取") }
+                    toolIcon(.text) { onUnimplemented("文字方塊") }
+
+                    Divider().frame(height: 36).padding(.horizontal, 4)
+
+                    toolIcon(.undo, label: false, action: onUndo)
+                    toolIcon(.redo, label: false, action: onRedo)
+                    toolIcon(.image) { onUnimplemented("插入圖片") }
+                    toolIcon(.materials) { onUnimplemented("教材附件") }
                 }
-                .padding(.leading, 4)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-        }
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .padding(.horizontal, 12)
-    }
-
-    private func toolButton(_ title: String, on: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 10)
                 .padding(.vertical, 8)
-                .background(on ? Color.accentColor : Color.gray.opacity(0.15))
-                .foregroundStyle(on ? Color.white : Color.primary)
-                .clipShape(Capsule())
+            }
+            .background(NotebookTheme.toolbarSurface)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
+
+            if state.showPenSizePanel, isPenFamily {
+                ToolWidthPopover(
+                    title: "筆畫粗細",
+                    width: $state.inkWidth,
+                    range: 1...20,
+                    previewColor: state.inkColor
+                )
+                .background(.regularMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .shadow(radius: 10)
+                .padding(.leading, 12)
+                .padding(.top, 72)
+            }
+
+            if state.showEraserSizePanel {
+                VStack(alignment: .leading, spacing: 10) {
+                    Picker("模式", selection: $state.eraserStyle) {
+                        Text("像素").tag(EraserStyle.bitmap)
+                        Text("筆劃").tag(EraserStyle.stroke)
+                    }
+                    .pickerStyle(.segmented)
+                    if state.eraserStyle == .stroke {
+                        ToolWidthPopover(
+                            title: "橡皮粗細",
+                            width: $state.eraserWidth,
+                            range: 4...48,
+                            previewColor: .gray,
+                            isEraser: true
+                        )
+                    }
+                }
+                .padding(12)
+                .background(.regularMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .shadow(radius: 10)
+                .padding(.leading, 180)
+                .padding(.top, 72)
+            }
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 10)
     }
 
-    static func pkTool(color: Color, width: CGFloat, eraser: Bool) -> PKTool {
-        if eraser {
-            return PKEraserTool(.bitmap)
+    private var isPenFamily: Bool {
+        state.inkKind == .pen || state.inkKind == .fountain || state.inkKind == .highlighter
+    }
+
+    @ViewBuilder
+    private func penTool(_ kind: InkToolKind, icon: NotebookIcons) -> some View {
+        NotebookIconTool(icon: icon, active: state.inkKind == kind) {
+            if state.inkKind == kind {
+                state.showPenSizePanel.toggle()
+                state.showEraserSizePanel = false
+            } else {
+                state.inkKind = kind
+                state.showPenSizePanel = true
+                state.showEraserSizePanel = false
+            }
         }
-        let uiColor = UIColor(color)
-        return PKInkingTool(.pen, color: uiColor, width: width)
+    }
+
+    private var eraserTool: some View {
+        NotebookIconTool(icon: .eraser, active: state.inkKind == .eraser) {
+            if state.inkKind == .eraser {
+                state.showEraserSizePanel.toggle()
+            } else {
+                state.inkKind = .eraser
+                state.showEraserSizePanel = true
+                state.showPenSizePanel = false
+            }
+        }
+    }
+
+    private var colorRow: some View {
+        HStack(spacing: 6) {
+            ForEach(swatches.indices, id: \.self) { index in
+                let swatch = swatches[index]
+                Button {
+                    state.inkColor = swatch
+                    if state.inkKind == .eraser {
+                        state.inkKind = .pen
+                    }
+                } label: {
+                    Circle()
+                        .fill(swatch)
+                        .frame(width: 26, height: 26)
+                        .overlay {
+                            Circle().stroke(state.inkColor == swatch ? Color.accentColor : Color.gray.opacity(0.35), lineWidth: 2)
+                        }
+                }
+                .buttonStyle(.plain)
+            }
+            ColorPicker("", selection: $state.inkColor)
+                .labelsHidden()
+                .frame(width: 30, height: 30)
+        }
+        .padding(.horizontal, 4)
+    }
+
+    private func toolIcon(_ icon: NotebookIcons, label: Bool = true, action: @escaping () -> Void) -> some View {
+        Group {
+            if label {
+                NotebookIconTool(icon: icon, action: action)
+            } else {
+                Button(action: action) {
+                    Image(systemName: icon.systemName)
+                        .font(.system(size: 20, weight: .medium))
+                        .frame(width: 40, height: 40)
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 }

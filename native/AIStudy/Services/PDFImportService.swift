@@ -30,13 +30,13 @@ enum PDFImportService {
             let size = CGSize(width: bounds.width * scale, height: bounds.height * scale)
             let image = pdfPage.thumbnail(of: size, for: .mediaBox)
             let jpeg = image.jpegData(compressionQuality: 0.82)
-            pages.append(
-                NotePage(
-                    title: "\(title) 第 \(index + 1) 頁",
-                    sortIndex: index,
-                    backgroundImageData: jpeg
-                )
+            let page = NotePage(
+                title: "\(title) 第 \(index + 1) 頁",
+                sortIndex: index,
+                backgroundImageData: jpeg
             )
+            PageThumbnailRenderer.refreshThumbnail(page: page)
+            pages.append(page)
         }
         guard !pages.isEmpty else { throw ImportError.empty }
         return (title, pages)

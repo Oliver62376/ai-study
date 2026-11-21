@@ -5,6 +5,7 @@ struct PageManagerSheet: View {
     @Bindable var notebook: Notebook
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @State private var editMode: EditMode = .active
 
     private var sortedPages: [NotePage] {
         notebook.pages.sorted { $0.sortIndex < $1.sortIndex }
@@ -13,30 +14,57 @@ struct PageManagerSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                ForEach(sortedPages) { page in
-                    HStack {
-                        Text(page.title)
-                        Spacer()
-                        Text(page.updatedAt.formatted(date: .omitted, time: .shortened))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                ForEach(sortedPages, id: \.id) { page in
+                    HStack(spacing: 12) {
+                        pageThumb(page)
+                            .frame(width: 54, height: 70)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color.gray.opacity(0.25), lineWidth: 0.5)
+                            }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(page.title)
+                                .font(.headline)
+                            Text(page.updatedAt.formatted(date: .abbreviated, time: .shortened))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
+                    .padding(.vertical, 4)
                 }
                 .onDelete(perform: deletePages)
                 .onMove(perform: movePages)
             }
-            .navigationTitle("頁面管理")
+            .environment(\.editMode, $editMode)
+            .navigationTitle("頁面")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
+                ToolbarItem(placement: .confirmationAction) {
                     Button("完成") { dismiss() }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .topBarLeading) {
                     EditButton()
                 }
                 ToolbarItem(placement: .bottomBar) {
-                    Button("新增頁") { addPage() }
+                    Button {
+                        addPage()
+                    } label: {
+                        Label("新增頁", systemImage: "plus")
+                    }
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func pageThumb(_ page: NotePage) -> some View {
+        if let image = PageThumbnailRenderer.render(page: page, targetWidth: 108) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+        } else {
+            NotebookTheme.paper
         }
     }
 
@@ -58,7 +86,9 @@ struct PageManagerSheet: View {
         pages.move(fromOffsets: source, toOffset: destination)
         for (index, page) in pages.enumerated() {
             page.sortIndex = index
-            page.title = "第 \(index + 1) 頁"
+            if !page.title.contains("第") || page.title.hasSuffix("頁") {
+                page.title = "第 \(index + 1) 頁"
+            }
         }
         notebook.updatedAt = .now
         try? context.save()
