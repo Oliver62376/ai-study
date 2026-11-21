@@ -1520,6 +1520,124 @@ button[aria-pressed="true"] {
   gap: 8px;
 }
 
+.usage-panel h2 {
+  margin-bottom: 8px;
+}
+
+.quota-card {
+  background: rgba(255, 255, 255, 0.45);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin: 12px 0;
+}
+
+.quota-card-label {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #6b6b6b;
+}
+
+.quota-card-stat {
+  margin: 6px 0 10px;
+  font-size: 1.6rem;
+}
+
+.quota-card-stat strong {
+  font-weight: 700;
+}
+
+.quota-card-sub {
+  font-size: 1rem;
+  color: #888;
+  font-weight: 500;
+  margin-left: 6px;
+}
+
+.quota-bar {
+  height: 8px;
+  background: #e6e6e6;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.quota-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3d8bfd, #5ba8ff);
+  border-radius: 999px;
+}
+
+.quota-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.quota-card-detail {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+}
+
+.token-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 120px;
+  margin: 16px 0 8px;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 10px;
+}
+
+.token-chart-col {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+
+.token-chart-stack {
+  width: 100%;
+  display: flex;
+  flex-direction: column-reverse;
+  min-height: 4px;
+  border-radius: 3px 3px 0 0;
+  overflow: hidden;
+}
+
+.token-chart-in {
+  background: #7cb8ff;
+  min-height: 1px;
+}
+
+.token-chart-out {
+  background: #4a90e2;
+  min-height: 1px;
+}
+
+.token-legend {
+  display: flex;
+  gap: 16px;
+  font-size: 0.85rem;
+  margin-bottom: 12px;
+}
+
+.token-legend-in::before,
+.token-legend-out::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 6px;
+}
+
+.token-legend-in::before {
+  background: #7cb8ff;
+}
+
+.token-legend-out::before {
+  background: #4a90e2;
+}
+
 .board-ink {
   font-family: "Bradley Hand", "Segoe Print", "Kaiti TC", cursive;
   font-size: 26px;

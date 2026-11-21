@@ -52,6 +52,9 @@ private struct WebClassroomWebView: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
+        if #available(iOS 10.0, *) {
+            config.mediaTypesRequiringUserActionForPlayback = []
+        }
         config.defaultWebpagePreferences.allowsContentJavaScript = true
         config.setURLSchemeHandler(WebAppSchemeHandler(), forURLScheme: "aistudy")
 

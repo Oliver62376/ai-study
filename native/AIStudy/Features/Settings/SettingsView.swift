@@ -3,7 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 private enum SettingsTab: String, CaseIterable, Identifiable {
-    case general, model, voice, notebook, pencil, prompts, memory
+    case general, model, usage, voice, notebook, pencil, prompts, memory
 
     var id: String { rawValue }
 
@@ -11,6 +11,7 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
         switch self {
         case .general: "一般"
         case .model: "模型"
+        case .usage: "用量"
         case .voice: "語音"
         case .notebook: "筆記"
         case .pencil: "Pencil"
@@ -60,6 +61,8 @@ struct SettingsView: View {
                     generalTab
                 case .model:
                     modelTab
+                case .usage:
+                    usageTab
                 case .voice:
                     voiceTab
                 case .notebook:
@@ -132,7 +135,7 @@ struct SettingsView: View {
             }
         }
         Section("關於") {
-            LabeledContent("版本", value: "0.3.4-beta")
+            LabeledContent("版本", value: "0.3.5-beta")
             LabeledContent("平台", value: "iPadOS 17+ · 26+ 系統液態玻璃")
         }
     }
@@ -171,8 +174,14 @@ struct SettingsView: View {
                     .autocorrectionDisabled()
             }
 
-            SecureField(current.isLocal ? "API 金鑰（可留空）" : "API 金鑰", text: bindingKey(current))
-                .textContentType(.password)
+            if current.isOfficial {
+                TextField("啟用碼", text: bindingKey(.official))
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+            } else {
+                SecureField(current.isLocal ? "API 金鑰（可留空）" : "API 金鑰", text: bindingKey(current))
+                    .textContentType(.password)
+            }
 
             ModelPickerField(providers: providers, provider: current)
 
@@ -188,6 +197,40 @@ struct SettingsView: View {
                 providers.persist()
                 savedFlash = true
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { savedFlash = false }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var usageTab: some View {
+        if providers.activeProvider.isOfficial {
+            Section {
+                Text("數字來自 Gateway 的 gateway_quota（每日 token、請求次數等）。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            if let state = GatewayQuotaStore.load() {
+                let quota = state.quota
+                if quota.remaining_tokens >= 0 {
+                    UsageQuotaRow(label: "今日剩餘 Token", remaining: quota.remaining_tokens, cap: state.caps.tokens_day)
+                }
+                if quota.remaining_requests_day >= 0 {
+                    UsageQuotaRow(label: "今日剩餘請求", remaining: quota.remaining_requests_day, cap: state.caps.requests_day)
+                }
+                if quota.remaining_requests_minute >= 0 {
+                    UsageQuotaRow(label: "本分鐘剩餘請求", remaining: quota.remaining_requests_minute, cap: state.caps.requests_minute)
+                }
+                Section {
+                    Button("清除用量快取", role: .destructive) { GatewayQuotaStore.clear() }
+                }
+            } else {
+                Section { Text("尚無資料。請先以啟用碼成功呼叫模型。").foregroundStyle(.secondary) }
+            }
+        } else {
+            Section {
+                Text("使用自備 API 時，Token 用量由 Web 教室設定頁的圖表顯示；原生 Chat／筆記 AI 也會累計 API usage。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -334,6 +377,40 @@ struct SettingsView: View {
             get: { providers.base(for: provider) },
             set: { providers.setBase($0, for: provider) }
         )
+    }
+}
+
+private struct UsageQuotaRow: View {
+    let label: String
+    let remaining: Int
+    let cap: Int?
+
+    private var percentUsed: Int {
+        guard let cap, cap > 0 else { return remaining <= 0 ? 100 : 0 }
+        let used = max(0, cap - remaining)
+        return min(100, Int((Double(used) / Double(cap)) * 100))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(label)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            Text("\(percentUsed)% 已使用")
+                .font(.title2.weight(.semibold))
+            ProgressView(value: Double(percentUsed), total: 100)
+                .tint(.blue)
+            if let cap, cap > 0 {
+                Text("剩餘 \(remaining.formatted()) / 約 \(cap.formatted())")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("剩餘 \(remaining.formatted())")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
     }
 }
 

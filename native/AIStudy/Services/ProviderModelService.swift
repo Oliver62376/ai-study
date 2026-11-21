@@ -39,6 +39,29 @@ enum ProviderModelService {
             }
         }
 
+        if provider.isOfficial {
+            let code = store.activationCode()
+            guard GatewayConfig.ready(activationCode: code) else { return [fallback] }
+            do {
+                var request = URLRequest(url: URL(string: GatewayConfig.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/models")!)
+                request.setValue("Bearer \(GatewayConfig.bearer)", forHTTPHeaderField: "Authorization")
+                request.setValue(code, forHTTPHeaderField: GatewayConfig.activationHeader)
+                let (data, resp) = try await URLSession.shared.data(for: request)
+                guard let http = resp as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
+                    return [fallback]
+                }
+                if let quota = ProviderAIService.parseGatewayQuota(headers: http.allHeaderFields, data: data) {
+                    GatewayQuotaStore.apply(quota)
+                }
+                let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+                let rows = json?["data"] as? [[String: Any]] ?? []
+                let names = rows.compactMap { $0["id"] as? String }.filter { chatLike($0) }
+                return uniq(names, fallback: fallback)
+            } catch {
+                return [fallback]
+            }
+        }
+
         guard !key.isEmpty else { return [fallback] }
 
         switch provider {

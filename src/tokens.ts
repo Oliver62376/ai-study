@@ -11,6 +11,13 @@ export interface TokenTotals {
 }
 
 const KEY = 'ai-study-tokens-v1'
+const HISTORY_KEY = 'ai-study-token-history-v1'
+
+export interface TokenHistoryPoint {
+  prompt: number
+  completion: number
+  at: number
+}
 
 export function loadTokenTotals(): TokenTotals {
   try {
@@ -28,6 +35,26 @@ export function loadTokenTotals(): TokenTotals {
   }
 }
 
+export function loadTokenHistory(): TokenHistoryPoint[] {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY)
+    if (!raw) return []
+    const list = JSON.parse(raw) as TokenHistoryPoint[]
+    return Array.isArray(list) ? list.slice(-32) : []
+  } catch {
+    return []
+  }
+}
+
+function pushTokenHistory(usage: TokenUsage) {
+  const list = [...loadTokenHistory(), { ...usage, at: Date.now() }].slice(-32)
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(list))
+}
+
+export function clearTokenHistory() {
+  localStorage.removeItem(HISTORY_KEY)
+}
+
 export function addTokenUsage(usage: TokenUsage) {
   if (usage.prompt <= 0 && usage.completion <= 0) return
   const current = loadTokenTotals()
@@ -38,6 +65,7 @@ export function addTokenUsage(usage: TokenUsage) {
     updatedAt: Date.now(),
   }
   localStorage.setItem(KEY, JSON.stringify(next))
+  pushTokenHistory(usage)
 }
 
 export function resetTokenTotals() {

@@ -50,7 +50,13 @@ function speakOnce(text: string, onend: () => void, fast: boolean) {
     const prefs = loadPreferences()
 
     if (isEmbeddedNativeWebView()) {
-      window.__aiStudyTTSOnEnd = finish
+      const watchdog = window.setTimeout(() => {
+        if (!settled) finish()
+      }, Math.min(120000, 8000 + text.length * 280))
+      window.__aiStudyTTSOnEnd = () => {
+        window.clearTimeout(watchdog)
+        finish()
+      }
       window.webkit!.messageHandlers!.aiStudyTTS!.postMessage({
         text,
         rate: prefs.ttsRate,
@@ -59,6 +65,7 @@ function speakOnce(text: string, onend: () => void, fast: boolean) {
       })
       cancel = () => {
         settled = true
+        window.clearTimeout(watchdog)
         window.webkit?.messageHandlers?.aiStudyTTSStop?.postMessage({})
       }
       return

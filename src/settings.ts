@@ -2,13 +2,21 @@ import { Capacitor, CapacitorHttp } from '@capacitor/core'
 import type { VisionPage } from './ocr'
 import { listVoices } from './speech'
 import {
+  activationCodeFor,
+  OFFICIAL_GATEWAY_BASE,
+  officialGatewayHeaders,
+  officialGatewayReady,
+  parseGatewayQuota,
+} from './gateway'
+import { applyGatewayQuota } from './gateway-quota'
+import {
   addTokenUsage,
   extractAnthropicUsage,
   extractGeminiUsage,
   extractOpenAiUsage,
 } from './tokens'
 
-export type ProviderId = 'grok' | 'openai' | 'gemini' | 'claude' | 'deepseek' | 'groq' | 'mistral' | 'lan'
+export type ProviderId = 'grok' | 'official' | 'openai' | 'gemini' | 'claude' | 'deepseek' | 'groq' | 'mistral' | 'lan'
 
 export interface ProviderOption {
   id: ProviderId
@@ -18,9 +26,20 @@ export interface ProviderOption {
   hint: string
   base?: string
   local?: boolean
+  /** 官方 Gateway：只填啟用碼，不顯示 API Key */
+  official?: boolean
 }
 
 export const providerOptions: ProviderOption[] = [
+  {
+    id: 'official',
+    name: '官方 API',
+    required: false,
+    defaultModel: 'gemini-2.5-flash',
+    hint: '填入啟用碼即可。固定 Token 由 App 內建，不需自備金鑰；用量依後端 gateway_quota。',
+    base: OFFICIAL_GATEWAY_BASE,
+    official: true,
+  },
   {
     id: 'grok',
     name: 'Grok',
@@ -131,8 +150,14 @@ export function baseFor(settings: AiSettings, id: ProviderId = settings.provider
   return settings.bases[id]?.trim() || optionFor(id).base || ''
 }
 
+export function isOfficialProvider(id: ProviderId) {
+  return Boolean(optionFor(id).official)
+}
+
 export function isConnected(settings: AiSettings) {
-  if (optionFor(settings.provider).local) return Boolean(baseFor(settings))
+  const option = optionFor(settings.provider)
+  if (option.official) return officialGatewayReady(activationCodeFor(settings))
+  if (option.local) return Boolean(baseFor(settings))
   return Boolean(keyFor(settings))
 }
 
@@ -152,15 +177,42 @@ function chatLike(id: string) {
   )
 }
 
-async function getJson(url: string, headers: Record<string, string>) {
+function headerRecord(raw: Record<string, unknown> | Headers | undefined): Record<string, string> {
+  if (!raw) return {}
+  if (raw instanceof Headers) {
+    const out: Record<string, string> = {}
+    raw.forEach((value, key) => {
+      out[key] = value
+    })
+    return out
+  }
+  const out: Record<string, string> = {}
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value === 'string') out[key] = value
+  }
+  return out
+}
+
+async function getJsonMeta(url: string, headers: Record<string, string>) {
   if (Capacitor.isNativePlatform()) {
     const response = await CapacitorHttp.get({ url, headers })
     if (response.status >= 400) throw new Error(`供應商回應 ${response.status}`)
-    return response.data as Record<string, unknown>
+    return {
+      data: response.data as Record<string, unknown>,
+      headers: headerRecord(response.headers as Record<string, unknown>),
+    }
   }
   const response = await fetch(url, { headers })
   if (!response.ok) throw new Error(`供應商回應 ${response.status}`)
-  return (await response.json()) as Record<string, unknown>
+  return {
+    data: (await response.json()) as Record<string, unknown>,
+    headers: headerRecord(response.headers),
+  }
+}
+
+async function getJson(url: string, headers: Record<string, string>) {
+  const { data } = await getJsonMeta(url, headers)
+  return data
 }
 
 export async function listProviderModels(settings: AiSettings, id: ProviderId = settings.provider) {
@@ -168,6 +220,22 @@ export async function listProviderModels(settings: AiSettings, id: ProviderId = 
   const key = keyFor(settings, id)
   const base = baseFor(settings, id)
   const fallback = modelFor(settings, id)
+
+  if (option.official) {
+    const code = activationCodeFor(settings)
+    if (!officialGatewayReady(code)) return [fallback]
+    const { data, headers } = await getJsonMeta(
+      `${OFFICIAL_GATEWAY_BASE.replace(/\/$/, '')}/models`,
+      officialGatewayHeaders(code),
+    )
+    const quota = parseGatewayQuota(headers, data)
+    if (quota) applyGatewayQuota(quota)
+    const rows = data.data as { id?: unknown }[] | undefined
+    const names = (rows ?? [])
+      .map((row) => (typeof row.id === 'string' ? row.id.trim() : ''))
+      .filter((name) => name && chatLike(name))
+    return uniqModels(names, fallback)
+  }
 
   if (option.local) {
     if (!base) return [fallback]
@@ -250,19 +318,30 @@ function uniqModels(names: string[], fallback: string) {
   return list
 }
 
-async function postJson(url: string, headers: Record<string, string>, data: unknown) {
+async function postJsonMeta(url: string, headers: Record<string, string>, body: unknown) {
   if (Capacitor.isNativePlatform()) {
-    const response = await CapacitorHttp.post({ url, headers, data })
+    const response = await CapacitorHttp.post({ url, headers, data: body })
     if (response.status >= 400) throw new Error(`供應商回應 ${response.status}`)
-    return response.data as Record<string, unknown>
+    return {
+      data: response.data as Record<string, unknown>,
+      headers: headerRecord(response.headers as Record<string, unknown>),
+    }
   }
   const response = await fetch(url, {
     method: 'POST',
     headers,
-    body: JSON.stringify(data),
+    body: JSON.stringify(body),
   })
   if (!response.ok) throw new Error(`供應商回應 ${response.status}`)
-  return (await response.json()) as Record<string, unknown>
+  return {
+    data: (await response.json()) as Record<string, unknown>,
+    headers: headerRecord(response.headers),
+  }
+}
+
+async function postJson(url: string, headers: Record<string, string>, data: unknown) {
+  const { data: json } = await postJsonMeta(url, headers, data)
+  return json
 }
 
 function readChat(data: Record<string, unknown>) {
@@ -308,8 +387,43 @@ export async function askProvider(
   ].join('\n')
 
   const images = visionPayload(vision)
+
+  if (provider === 'official') {
+    const code = activationCodeFor(settings)
+    if (!officialGatewayReady(code)) return null
+    const headers = officialGatewayHeaders(code)
+    const userContent =
+      images.length > 0
+        ? [
+            ...images.map((page) => ({
+              type: 'image_url',
+              image_url: { url: page.dataUrl },
+            })),
+            { type: 'text', text: `${question}\n\n${context}` },
+          ]
+        : `${question}\n\n${context}`
+    const { data, headers: responseHeaders } = await postJsonMeta(
+      `${OFFICIAL_GATEWAY_BASE.replace(/\/$/, '')}/chat/completions`,
+      headers,
+      {
+        model,
+        messages: [
+          { role: 'system', content: instruction },
+          { role: 'user', content: userContent },
+        ],
+      },
+    )
+    const text = readChat(data)
+    const footprint = promptFootprint(question, context, instruction)
+    const usage = extractOpenAiUsage(data, footprint, text)
+    addTokenUsage(usage)
+    const quota = parseGatewayQuota(responseHeaders, data)
+    if (quota) applyGatewayQuota(quota, usage.prompt + usage.completion)
+    return text
+  }
+
   const base = baseFor(settings)
-  if (base) {
+  if (base && !optionFor(provider).official) {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     if (key) headers.Authorization = `Bearer ${key}`
     const userContent =

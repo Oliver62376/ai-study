@@ -11,6 +11,10 @@ enum WebLocalStorageBridge {
         if let memory = UserDefaults.standard.string(forKey: "ai-study-memory-v1"), !memory.isEmpty {
             lines.append(jsSetB64("ai-study-memory-v1", memory))
         }
+        if let quota = UserDefaults.standard.data(forKey: "ai-study-gateway-quota-v1"),
+           let json = String(data: quota, encoding: .utf8) {
+            lines.append(jsSetB64("ai-study-gateway-quota-v1", json))
+        }
         lines.append("localStorage.setItem('ai-study-grade-v1','\(GradeStore.grade.rawValue)');")
         lines.append("}catch(e){console.error('native storage bridge',e);}})();")
         return lines.joined()

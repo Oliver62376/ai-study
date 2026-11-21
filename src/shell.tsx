@@ -45,18 +45,19 @@ import {
 
 import { NotebookHomeSection } from './notebook-hub'
 import { MemoryBankPanel } from './memory-bank-ui'
+import { UsagePanel } from './usage-panel'
+import { activationCodeFor } from './gateway'
 import { APP_VERSION } from './custom-prompts'
 import { gradeLabel, gradeOptions, loadGrade, saveGrade, type GradeId } from './profile'
 import {
   baseFor,
   isConnected,
+  isOfficialProvider,
   keyFor,
   listProviderModels,
   listVoicesForSettings,
   loadSettings,
-  loadTokenTotals,
   modelFor,
-  resetTokenTotals,
   optionFor,
   providerOptions,
   saveSettings,
@@ -333,18 +334,16 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   const [modelsLoading, setModelsLoading] = useState(false)
   const [modelsNote, setModelsNote] = useState('')
   const [voices, setVoices] = useState(() => listVoicesForSettings())
-  const [tokenTotals, setTokenTotals] = useState(() => loadTokenTotals())
   const [stylus, setStylus] = useState<StylusPreferences>(() => loadStylusPreferences())
   const [customPrompts, setCustomPrompts] = useState<CustomPrompts>(() => loadCustomPrompts())
   const [settingsTab, setSettingsTab] = useState<
-    'general' | 'model' | 'voice' | 'notebook' | 'pencil' | 'prompts' | 'memory'
+    'general' | 'model' | 'usage' | 'voice' | 'notebook' | 'pencil' | 'prompts' | 'memory'
   >('general')
   const current = optionFor(settings.provider)
   const provider = settings.provider
   const apiBase = settings.bases[provider]?.trim() ?? optionFor(provider).base ?? ''
 
   useEffect(() => {
-    setTokenTotals(loadTokenTotals())
     const refresh = () => setVoices(listVoicesForSettings())
     refresh()
     if ('speechSynthesis' in window) window.speechSynthesis.onvoiceschanged = refresh
@@ -356,7 +355,9 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   const refreshModels = useCallback(async (draft: AiSettings) => {
     if (!isConnected(draft)) {
       setModelChoices([modelFor(draft)])
-      setModelsNote('先填好金鑰或局域網位址。')
+      setModelsNote(
+        isOfficialProvider(draft.provider) ? '請先填寫啟用碼。' : '先填好金鑰或局域網位址。',
+      )
       return
     }
     setModelsLoading(true)
@@ -373,7 +374,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
 
   useEffect(() => {
     void refreshModels(settings)
-  }, [provider, apiBase, refreshModels])
+  }, [provider, apiBase, settings.keys.official, refreshModels])
 
   function choose(id: ProviderId) {
     setSaved(false)
@@ -391,7 +392,6 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
     saveGrade(grade)
     saveStylusPreferences(stylus)
     saveCustomPrompts(customPrompts)
-    setTokenTotals(loadTokenTotals())
     setSaved(true)
   }
 
@@ -451,6 +451,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
             [
               ['general', '一般'],
               ['model', '模型'],
+              ['usage', '用量'],
               ['voice', '語音'],
               ['notebook', '筆記'],
               ['pencil', 'Pencil'],
@@ -714,31 +715,12 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
         </section>
         )}
 
-        {settingsTab === 'general' && (
-        <section>
-          <h2>Token 用量（本機累計）</h2>
-          <p className="os-muted">
-            輸入（prompt）<strong>{tokenTotals.prompt.toLocaleString()}</strong> · 輸出（completion）
-            <strong> {tokenTotals.completion.toLocaleString()}</strong> · 共 {tokenTotals.calls} 次呼叫
-          </p>
-          <p className="os-muted">有回傳 usage 時用 API 數字；否則以字數估算。</p>
-          <button
-            type="button"
-            className="nb-plain-btn"
-            onClick={() => {
-              resetTokenTotals()
-              setTokenTotals(loadTokenTotals())
-            }}
-          >
-            歸零統計
-          </button>
-        </section>
-        )}
+        {settingsTab === 'usage' && <UsagePanel key={settings.provider} />}
 
         {settingsTab === 'model' && (
         <section>
           <h2>模型與 API</h2>
-          <p className="os-muted">金鑰只留在本機 · Grok 必留</p>
+          <p className="os-muted">{current.official ? '官方 API 只需啟用碼' : '金鑰只留在本機 · Grok 必留'}</p>
           <div className="provider-list os-providers">
             {providerOptions.map((option) => (
               <label key={option.id} className={option.id === settings.provider ? 'provider selected' : 'provider'}>
@@ -751,7 +733,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
             ))}
           </div>
           <p className="os-muted">{current.hint}</p>
-          {current.local && (
+          {current.local && !current.official && (
             <label className="field">
               服務位址
               <input
@@ -767,21 +749,41 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
               />
             </label>
           )}
-          <label className="field">
-            {current.local ? 'API 金鑰（可留空）' : 'API 金鑰'}
-            <input
-              type="password"
-              autoComplete="off"
-              value={keyFor(settings)}
-              onChange={(event) =>
-                patch((value) => ({
-                  ...value,
-                  keys: { ...value.keys, [value.provider]: event.target.value },
-                }))
-              }
-              onBlur={() => void refreshModels(settings)}
-            />
-          </label>
+          {current.official ? (
+            <label className="field">
+              啟用碼
+              <input
+                type="text"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="act-..."
+                value={activationCodeFor(settings)}
+                onChange={(event) =>
+                  patch((value) => ({
+                    ...value,
+                    keys: { ...value.keys, official: event.target.value },
+                  }))
+                }
+                onBlur={() => void refreshModels(settings)}
+              />
+            </label>
+          ) : (
+            <label className="field">
+              {current.local ? 'API 金鑰（可留空）' : 'API 金鑰'}
+              <input
+                type="password"
+                autoComplete="off"
+                value={keyFor(settings)}
+                onChange={(event) =>
+                  patch((value) => ({
+                    ...value,
+                    keys: { ...value.keys, [value.provider]: event.target.value },
+                  }))
+                }
+                onBlur={() => void refreshModels(settings)}
+              />
+            </label>
+          )}
           <label className="field">
             模型
             <div className="model-row">

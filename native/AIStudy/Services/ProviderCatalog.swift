@@ -1,12 +1,13 @@
 import Foundation
 
 enum ProviderId: String, CaseIterable, Identifiable, Codable {
-    case grok, openai, gemini, claude, deepseek, groq, mistral, lan
+    case official, grok, openai, gemini, claude, deepseek, groq, mistral, lan
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
+        case .official: "官方 API"
         case .grok: "Grok"
         case .openai: "OpenAI"
         case .gemini: "Gemini"
@@ -20,6 +21,7 @@ enum ProviderId: String, CaseIterable, Identifiable, Codable {
 
     var defaultModel: String {
         switch self {
+        case .official: "gemini-2.5-flash"
         case .grok: "grok-4.7"
         case .openai: "gpt-4.1"
         case .gemini: "gemini-2.5-flash"
@@ -33,6 +35,7 @@ enum ProviderId: String, CaseIterable, Identifiable, Codable {
 
     var defaultBase: String {
         switch self {
+        case .official: GatewayConfig.baseURL
         case .grok: "https://api.x.ai/v1"
         case .openai: "https://api.openai.com/v1"
         case .gemini: "https://generativelanguage.googleapis.com/v1beta"
@@ -46,6 +49,7 @@ enum ProviderId: String, CaseIterable, Identifiable, Codable {
 
     var hint: String {
         switch self {
+        case .official: "填入啟用碼即可，不需自備 API 金鑰。用量見「用量」分頁。"
         case .grok: "xAI。這個選項會一直留在設定裡。"
         case .lan: "區網 OpenAI 相容服務，例如 Ollama、LM Studio。填位址即可，金鑰可留空。"
         default: "填入 API 金鑰後，可從下拉選預設模型。"
@@ -53,6 +57,8 @@ enum ProviderId: String, CaseIterable, Identifiable, Codable {
     }
 
     var isLocal: Bool { self == .lan }
+
+    var isOfficial: Bool { self == .official }
 
     var isRequired: Bool { self == .grok }
 }
@@ -123,7 +129,14 @@ final class ProviderSettingsStore {
         isConnected(for: activeProvider)
     }
 
+    func activationCode() -> String {
+        key(for: .official).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     func isConnected(for provider: ProviderId) -> Bool {
+        if provider.isOfficial {
+            return GatewayConfig.ready(activationCode: activationCode())
+        }
         if provider.isLocal {
             return !base(for: provider).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
