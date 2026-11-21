@@ -75,17 +75,26 @@ enum ProviderAIService {
         return try parseOpenAIChat(data)
     }
 
+    private static func headerString(_ headers: [AnyHashable: Any], _ names: String...) -> String? {
+        for name in names {
+            guard let v = headers[name] else { continue }
+            if let s = v as? String { return s }
+            if let n = v as? NSNumber { return n.stringValue }
+        }
+        return nil
+    }
+
     static func parseGatewayQuota(headers: [AnyHashable: Any], data: Data) -> GatewayQuota? {
         var minute: Int?
         var day: Int?
         var tokens: Int?
-        if let raw = headers["X-Remaining-Requests-Minute"] ?? headers["x-remaining-requests-minute"] as? String {
+        if let raw = headerString(headers, "X-Remaining-Requests-Minute", "x-remaining-requests-minute") {
             minute = Int(raw)
         }
-        if let raw = headers["X-Remaining-Requests-Day"] ?? headers["x-remaining-requests-day"] as? String {
+        if let raw = headerString(headers, "X-Remaining-Requests-Day", "x-remaining-requests-day") {
             day = Int(raw)
         }
-        if let raw = headers["X-Remaining-Tokens"] ?? headers["x-remaining-tokens"] as? String {
+        if let raw = headerString(headers, "X-Remaining-Tokens", "x-remaining-tokens") {
             tokens = Int(raw)
         }
         if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
