@@ -151,8 +151,7 @@ struct NotebookInkToolbar: View {
                 NotebookIconTool(icon: icon, action: action)
             } else {
                 Button(action: action) {
-                    Image(systemName: icon.systemName)
-                        .font(.system(size: 20, weight: .medium))
+                    NotebookGlyph(icon: icon)
                         .frame(width: 40, height: 40)
                 }
                 .buttonStyle(.plain)

@@ -1,18 +1,23 @@
 import SwiftUI
 
-/// 先用 SF Symbols；放入 Assets 的 SVG/PDF 後改 `assetName` 即可替換。
 enum NotebookIcons {
     case pen, fountain, highlighter, eraser, shapes, lasso, text
     case undo, redo, image, materials, pages, share, settings
 
+    var assetName: String? {
+        switch self {
+        case .pen: return "nb-pen"
+        case .fountain: return "nb-fountain"
+        case .highlighter: return "nb-highlighter"
+        case .eraser: return "nb-eraser"
+        case .shapes: return "nb-shapes"
+        case .lasso: return "nb-lasso"
+        default: return nil
+        }
+    }
+
     var systemName: String {
         switch self {
-        case .pen: return "pencil.tip"
-        case .fountain: return "pencil.and.scribble"
-        case .highlighter: return "highlighter"
-        case .eraser: return "eraser.fill"
-        case .shapes: return "square.on.circle"
-        case .lasso: return "lasso"
         case .text: return "textformat"
         case .undo: return "arrow.uturn.backward"
         case .redo: return "arrow.uturn.forward"
@@ -21,6 +26,7 @@ enum NotebookIcons {
         case .pages: return "square.stack.3d.up"
         case .share: return "square.and.arrow.up"
         case .settings: return "gearshape"
+        default: return "questionmark"
         }
     }
 
@@ -44,6 +50,24 @@ enum NotebookIcons {
     }
 }
 
+struct NotebookGlyph: View {
+    let icon: NotebookIcons
+    var size: CGFloat = 22
+
+    var body: some View {
+        if let asset = icon.assetName {
+            Image(asset)
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: size, height: size)
+        } else {
+            Image(systemName: icon.systemName)
+                .font(.system(size: size - 2, weight: .medium))
+        }
+    }
+}
+
 struct NotebookIconTool: View {
     let icon: NotebookIcons
     var active = false
@@ -52,8 +76,7 @@ struct NotebookIconTool: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: 4) {
-                Image(systemName: icon.systemName)
-                    .font(.system(size: 20, weight: .medium))
+                NotebookGlyph(icon: icon)
                     .frame(width: 36, height: 28)
                 Text(icon.label)
                     .font(.system(size: 11, weight: .semibold))
