@@ -15,8 +15,13 @@ final class WebSpeechBridge: NSObject, WKScriptMessageHandler, AVSpeechSynthesiz
     private func prepareAudioSession() {
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers, .defaultToSpeaker])
-            try session.setActive(true, options: .notifyOthersOnDeactivation)
+            try session.setCategory(
+                .playback,
+                mode: .spokenAudio,
+                options: [.duckOthers, .defaultToSpeaker, .allowBluetoothA2DP]
+            )
+            try session.setActive(true, options: [])
+            try session.overrideOutputAudioPort(.speaker)
         } catch {
             NSLog("WebSpeechBridge audio session: \(error.localizedDescription)")
         }
@@ -46,16 +51,12 @@ final class WebSpeechBridge: NSObject, WKScriptMessageHandler, AVSpeechSynthesiz
                 ?? AVSpeechSynthesisVoice(language: "zh-CN") {
                 utterance.voice = zh
             }
-            notifyEndOnFinish = true
             if synth.isSpeaking {
                 notifyEndOnFinish = false
                 synth.stopSpeaking(at: .immediate)
             }
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                self.notifyEndOnFinish = true
-                self.synth.speak(utterance)
-            }
+            notifyEndOnFinish = true
+            synth.speak(utterance)
         case "aiStudyTTSStop":
             notifyEndOnFinish = false
             synth.stopSpeaking(at: .immediate)

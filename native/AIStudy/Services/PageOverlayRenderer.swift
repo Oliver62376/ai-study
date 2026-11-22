@@ -70,12 +70,34 @@ enum PageOverlayRenderer {
 
         for block in overlays.texts {
             let text = block.isPlaceholder && block.text.isEmpty ? "在這裡輸入文字" : block.text
+            var font = UIFont.systemFont(ofSize: CGFloat(block.fontSize))
+            switch block.fontDesign {
+            case .rounded:
+                if let rounded = UIFont.systemFont(ofSize: CGFloat(block.fontSize), weight: block.isBold ? .bold : .regular)
+                    .fontDescriptor.withDesign(.rounded) {
+                    font = UIFont(descriptor: rounded, size: CGFloat(block.fontSize))
+                }
+            case .serif:
+                if let serif = UIFont.systemFont(ofSize: CGFloat(block.fontSize)).fontDescriptor.withDesign(.serif) {
+                    font = UIFont(descriptor: serif, size: CGFloat(block.fontSize))
+                }
+            case .system:
+                font = UIFont.systemFont(ofSize: CGFloat(block.fontSize), weight: block.isBold ? .bold : .regular)
+            }
+            if block.isItalic, let italic = font.fontDescriptor.withSymbolicTraits(.traitItalic) {
+                font = UIFont(descriptor: italic, size: font.pointSize)
+            }
+            let frame = CGRect(x: block.x, y: block.y, width: block.width, height: block.height)
+            if let bgHex = block.backgroundHex {
+                context.setFillColor(UIColor(Color(hex: bgHex)).withAlphaComponent(0.92).cgColor)
+                context.fill(frame)
+            }
             let attrs: [NSAttributedString.Key: Any] = [
-                .font: UIFont.systemFont(ofSize: CGFloat(block.fontSize)),
+                .font: font,
                 .foregroundColor: UIColor(Color(hex: block.colorHex)),
             ]
-            let frame = CGRect(x: block.x, y: block.y, width: block.width, height: block.height)
-            NSString(string: text).draw(with: frame, options: [.usesLineFragmentOrigin], attributes: attrs, context: nil)
+            let inset = frame.insetBy(dx: 8, dy: 8)
+            NSString(string: text).draw(with: inset, options: [.usesLineFragmentOrigin], attributes: attrs, context: nil)
         }
 
         context.restoreGState()

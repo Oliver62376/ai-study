@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 import WebKit
 
@@ -28,6 +29,9 @@ struct WebClassroomView: View {
         .navigationBarHidden(true)
         .toolbar(.hidden, for: .tabBar)
         .onAppear {
+            let session = AVAudioSession.sharedInstance()
+            try? session.setCategory(.playback, mode: .spokenAudio, options: [.defaultToSpeaker, .allowBluetoothA2DP])
+            try? session.setActive(true)
             let snap = LessonStore.record(id: lessonId)?.snapshotJSON
             _ = LessonStore.register(
                 id: lessonId,

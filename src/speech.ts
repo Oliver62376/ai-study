@@ -18,7 +18,7 @@ declare global {
 }
 
 function isEmbeddedNativeWebView() {
-  return Boolean(window.__AI_STUDY_EMBEDDED__ && window.webkit?.messageHandlers?.aiStudyTTS)
+  return Boolean(window.webkit?.messageHandlers?.aiStudyTTS)
 }
 
 export function listVoices() {

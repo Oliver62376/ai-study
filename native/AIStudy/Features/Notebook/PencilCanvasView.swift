@@ -153,6 +153,7 @@ struct PencilCanvasView: UIViewRepresentable {
         view.backgroundColor = .clear
         view.isOpaque = false
         view.tool = tool ?? PKInkingTool(.pen, color: .black, width: 3)
+        view.drawing = drawing
         view.isUserInteractionEnabled = inkInteractionEnabled
         view.delegate = context.coordinator
         DispatchQueue.main.async {
@@ -165,9 +166,7 @@ struct PencilCanvasView: UIViewRepresentable {
         if let snap = uiView as? SnapPKCanvasView {
             snap.holdSnapEnabled = holdSnapEnabled
         }
-        if uiView.drawing.dataRepresentation() != drawing.dataRepresentation() {
-            uiView.drawing = drawing
-        }
+        // 勿從 binding 覆寫 drawing，否則會清空 undo 堆疊。
         uiView.drawingPolicy = StylusPreferencesStore.preferences.pencilOnly ? .pencilOnly : .anyInput
         if inkInteractionEnabled, let tool {
             uiView.tool = tool

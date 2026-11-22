@@ -7,7 +7,7 @@ struct AIStudyApp: App {
     init() {
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            try session.setCategory(.playback, mode: .spokenAudio, options: [.defaultToSpeaker, .allowBluetoothA2DP])
             try session.setActive(true)
         } catch {
             NSLog("App audio session: \(error.localizedDescription)")

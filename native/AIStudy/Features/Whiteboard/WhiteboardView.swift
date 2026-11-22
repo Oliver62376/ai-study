@@ -22,7 +22,10 @@ struct WhiteboardView: View {
                     }
                 }
                 Spacer()
-                Button("清除") { drawing = PKDrawing() }
+                Button("清除") {
+                    drawing = PKDrawing()
+                    canvas?.drawing = PKDrawing()
+                }
             }
             .padding()
             .liquidGlassBar(cornerRadius: 0)

@@ -1,5 +1,9 @@
 import Foundation
 
+enum TextFontDesign: String, Codable, CaseIterable {
+    case system, rounded, serif
+}
+
 struct TextAnnotation: Identifiable, Codable, Hashable {
     var id: UUID = UUID()
     var x: Double
@@ -10,6 +14,10 @@ struct TextAnnotation: Identifiable, Codable, Hashable {
     var colorHex: String
     var fontSize: Double
     var isPlaceholder: Bool = false
+    var fontDesign: TextFontDesign = .system
+    var isBold: Bool = false
+    var isItalic: Bool = false
+    var backgroundHex: String?
 }
 
 struct ImageSticker: Identifiable, Codable, Hashable {

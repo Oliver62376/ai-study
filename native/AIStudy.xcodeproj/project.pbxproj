@@ -71,6 +71,9 @@
 		A10000010000000000000040 /* NotebookInkPresetsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000040 /* NotebookInkPresetsStore.swift */; };
 		A10000010000000000000041 /* NotebookScrollOverscroll.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000041 /* NotebookScrollOverscroll.swift */; };
 		A10000010000000000000042 /* NotebookBottomPullFooter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000042 /* NotebookBottomPullFooter.swift */; };
+		A10000010000000000000043 /* NotebookPageZoomView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000043 /* NotebookPageZoomView.swift */; };
+		A10000010000000000000044 /* ShapeLassoOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000044 /* ShapeLassoOverlay.swift */; };
+		A10000010000000000000045 /* TextFormatFloatingBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000045 /* TextFormatFloatingBar.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -140,6 +143,9 @@
 		A20000010000000000000040 /* NotebookInkPresetsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookInkPresetsStore.swift; sourceTree = "<group>"; };
 		A20000010000000000000041 /* NotebookScrollOverscroll.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookScrollOverscroll.swift; sourceTree = "<group>"; };
 		A20000010000000000000042 /* NotebookBottomPullFooter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookBottomPullFooter.swift; sourceTree = "<group>"; };
+		A20000010000000000000043 /* NotebookPageZoomView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotebookPageZoomView.swift; sourceTree = "<group>"; };
+		A20000010000000000000044 /* ShapeLassoOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShapeLassoOverlay.swift; sourceTree = "<group>"; };
+		A20000010000000000000045 /* TextFormatFloatingBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextFormatFloatingBar.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -246,6 +252,9 @@
 				A20000010000000000000022 /* ShapeToolFloatingBar.swift */,
 				A20000010000000000000041 /* NotebookScrollOverscroll.swift */,
 				A20000010000000000000042 /* NotebookBottomPullFooter.swift */,
+				A20000010000000000000043 /* NotebookPageZoomView.swift */,
+				A20000010000000000000044 /* ShapeLassoOverlay.swift */,
+				A20000010000000000000045 /* TextFormatFloatingBar.swift */,
 			);
 			path = Notebook;
 			sourceTree = "<group>";
@@ -478,6 +487,9 @@
 				A10000010000000000000040 /* NotebookInkPresetsStore.swift in Sources */,
 				A10000010000000000000041 /* NotebookScrollOverscroll.swift in Sources */,
 				A10000010000000000000042 /* NotebookBottomPullFooter.swift in Sources */,
+				A10000010000000000000043 /* NotebookPageZoomView.swift in Sources */,
+				A10000010000000000000044 /* ShapeLassoOverlay.swift in Sources */,
+				A10000010000000000000045 /* TextFormatFloatingBar.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -529,7 +541,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.3.6;
+				MARKETING_VERSION = 0.3.7;
 				PRODUCT_BUNDLE_IDENTIFIER = com.oliver62376.aistudy.native;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -554,7 +566,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.3.6;
+				MARKETING_VERSION = 0.3.7;
 				PRODUCT_BUNDLE_IDENTIFIER = com.oliver62376.aistudy.native;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

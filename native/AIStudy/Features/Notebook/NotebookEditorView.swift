@@ -16,6 +16,7 @@ struct NotebookEditorView: View {
     @State private var activePageId: String?
     @State private var toolPicker = PKToolPicker()
     @State private var activeCanvas: PKCanvasView?
+    @State private var canvasesByPageId: [String: PKCanvasView] = [:]
     @State private var showPageManager = false
     @State private var showToolbarAppearance = false
     @State private var showSettings = false
@@ -26,7 +27,7 @@ struct NotebookEditorView: View {
     @State private var importMaterial = false
     @State private var showPhotoPicker = false
     @State private var selectedImageId: UUID?
-    @State private var selectedShapeId: UUID?
+    @State private var selectedShapeIds: Set<UUID> = []
     @State private var editingTextId: UUID?
     @State private var showPomodoro = false
     @State private var scrollOverscroll: CGFloat = 0
@@ -48,8 +49,8 @@ struct NotebookEditorView: View {
                 NotebookInkToolbar(
                     state: toolbar,
                     appearance: appearance,
-                    onUndo: { activeCanvas?.undoManager?.undo() },
-                    onRedo: { activeCanvas?.undoManager?.redo() },
+                    onUndo: { performUndo() },
+                    onRedo: { performRedo() },
                     onPickImage: { showPhotoPicker = true },
                     onAttachMaterial: { importMaterial = true },
                     onToolbarLongPress: { showToolbarAppearance = true }
@@ -71,18 +72,19 @@ struct NotebookEditorView: View {
                                 inkInteractionEnabled: toolbar.allowsInkOnCanvas,
                                 isActive: activePageId == page.id,
                                 selectedImageId: $selectedImageId,
-                                selectedShapeId: $selectedShapeId,
+                                selectedShapeIds: $selectedShapeIds,
                                 editingTextId: $editingTextId,
                                 onSelect: {
                                     activePageId = page.id
                                     selectedImageId = nil
-                                    selectedShapeId = nil
+                                    selectedShapeIds = []
                                     toolbar.showPenSizePanel = false
                                     toolbar.showEraserSizePanel = false
                                     toolbar.showShapePanel = false
                                 },
                                 onFocusCanvas: { canvas in
                                     activeCanvas = canvas
+                                    canvasesByPageId[page.id] = canvas
                                     attachToolPicker(to: canvas)
                                 },
                                 onTapForText: { point in
@@ -121,6 +123,16 @@ struct NotebookEditorView: View {
 
             InkToolFloatingPanels(state: toolbar)
                 .padding(.top, 112)
+
+            if editingTextId != nil, let page = activePage {
+                TextFormatFloatingBar(page: page, editingTextId: $editingTextId) {
+                    page.updatedAt = .now
+                    try? context.save()
+                }
+                .padding(.top, 112)
+                .padding(.trailing, 16)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+            }
 
             if showNotebookAI, let page = activePage {
                 NotebookAIPanel(
@@ -186,7 +198,7 @@ struct NotebookEditorView: View {
         .onChange(of: toolbar.inkKind) { _, kind in
             syncTool()
             selectedImageId = nil
-            selectedShapeId = nil
+            selectedShapeIds = []
             if kind != .text {
                 editingTextId = nil
             }
@@ -196,10 +208,32 @@ struct NotebookEditorView: View {
         .onChange(of: toolbar.shapeStroke) { _, _ in syncTool() }
     }
 
+    private func canvasForUndo() -> PKCanvasView? {
+        if let activePageId, let canvas = canvasesByPageId[activePageId] {
+            return canvas
+        }
+        return activeCanvas
+    }
+
+    private func performUndo() {
+        guard let canvas = canvasForUndo() else { return }
+        guard canvas.undoManager?.canUndo == true else { return }
+        canvas.undoManager?.undo()
+        activeCanvas = canvas
+    }
+
+    private func performRedo() {
+        guard let canvas = canvasForUndo() else { return }
+        guard canvas.undoManager?.canRedo == true else { return }
+        canvas.undoManager?.redo()
+        activeCanvas = canvas
+    }
+
     private func syncTool() {
         guard toolbar.allowsInkOnCanvas else { return }
-        activeCanvas?.tool = toolbar.pkTool()
-        activeCanvas?.isUserInteractionEnabled = true
+        let canvas = canvasForUndo()
+        canvas?.tool = toolbar.pkTool()
+        canvas?.isUserInteractionEnabled = true
     }
 
     private var headerBar: some View {

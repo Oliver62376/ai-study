@@ -11,7 +11,7 @@ struct PageOverlayView: View {
     @Binding var draftShapeStart: CGPoint?
     @Binding var draftShapeEnd: CGPoint?
     @Binding var selectedImageId: UUID?
-    @Binding var selectedShapeId: UUID?
+    @Binding var selectedShapeIds: Set<UUID>
     @Binding var editingTextId: UUID?
     var onTapForText: (CGPoint) -> Void
     var onPersist: () -> Void
@@ -20,15 +20,8 @@ struct PageOverlayView: View {
         let overlays = page.overlays
         ZStack {
             ForEach(overlays.shapes) { shape in
-                vectorShapeView(shape, selected: selectedShapeId == shape.id)
-                    .contentShape(shapeHitShape(shape))
-                    .onTapGesture {
-                        guard toolKind == .lasso else { return }
-                        selectedShapeId = shape.id
-                        selectedImageId = nil
-                        editingTextId = nil
-                    }
-                    .allowsHitTesting(toolKind == .lasso)
+                vectorShapeView(shape, selected: selectedShapeIds.contains(shape.id))
+                    .allowsHitTesting(false)
             }
             ForEach(Array(overlays.images.enumerated()), id: \.element.id) { index, sticker in
                 TransformableImageSticker(
@@ -36,7 +29,7 @@ struct PageOverlayView: View {
                     isSelected: selectedImageId == sticker.id,
                     onSelect: {
                         selectedImageId = sticker.id
-                        selectedShapeId = nil
+                        selectedShapeIds = []
                         editingTextId = nil
                     },
                     onDeselect: {
@@ -60,8 +53,21 @@ struct PageOverlayView: View {
                     .gesture(textTapGesture(overlays: overlays))
             }
             ForEach(Array(overlays.texts.enumerated()), id: \.element.id) { index, block in
-                textBlockView(block, index: index)
-                    .allowsHitTesting(toolKind == .text || editingTextId == block.id)
+                TransformableTextBlock(
+                    page: page,
+                    index: index,
+                    block: block,
+                    toolKind: toolKind,
+                    isEditing: editingTextId == block.id,
+                    onBeginEdit: {
+                        selectedImageId = nil
+                        selectedShapeIds = []
+                        editingTextId = block.id
+                        clearPlaceholder(at: index)
+                    },
+                    onPersist: onPersist
+                )
+                .allowsHitTesting(toolKind == .text || editingTextId == block.id)
             }
             if toolKind == .text, overlays.texts.isEmpty, editingTextId == nil {
                 Text("在這裡輸入文字")
@@ -112,53 +118,6 @@ struct PageOverlayView: View {
                 guard index < next.images.count else { return }
                 next.images[index] = newValue
                 page.overlays = next
-            }
-        )
-    }
-
-    @ViewBuilder
-    private func textBlockView(_ block: TextAnnotation, index: Int) -> some View {
-        let isEditing = editingTextId == block.id
-        Group {
-            if isEditing {
-                TextField(
-                    "在這裡輸入文字",
-                    text: bindingForText(at: index),
-                    axis: .vertical
-                )
-                .font(.system(size: block.fontSize))
-                .foregroundStyle(Color(hex: block.colorHex))
-                .textFieldStyle(.plain)
-                .padding(8)
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-            } else {
-                Text(block.isPlaceholder && block.text.isEmpty ? "在這裡輸入文字" : block.text)
-                    .font(.system(size: block.fontSize))
-                    .foregroundStyle(block.isPlaceholder ? Color.secondary : Color(hex: block.colorHex))
-                    .frame(width: block.width, height: block.height, alignment: .topLeading)
-                    .onTapGesture {
-                        selectedImageId = nil
-                        selectedShapeId = nil
-                        editingTextId = block.id
-                        clearPlaceholder(at: index)
-                    }
-            }
-        }
-        .frame(width: block.width, height: block.height, alignment: .topLeading)
-        .position(x: block.x + block.width / 2, y: block.y + block.height / 2)
-    }
-
-    private func bindingForText(at index: Int) -> Binding<String> {
-        Binding(
-            get: { page.overlays.texts[index].text },
-            set: { newValue in
-                var next = page.overlays
-                guard index < next.texts.count else { return }
-                next.texts[index].text = newValue
-                next.texts[index].isPlaceholder = false
-                page.overlays = next
-                onPersist()
             }
         )
     }
@@ -268,6 +227,129 @@ struct PageOverlayView: View {
                 x2: Double(end.x),
                 y2: Double(end.y)
             )
+        )
+    }
+}
+
+enum TextAnnotationFont {
+    static func font(for block: TextAnnotation) -> Font {
+        var base: Font
+        switch block.fontDesign {
+        case .system:
+            base = .system(size: block.fontSize)
+        case .rounded:
+            base = .system(size: block.fontSize, design: .rounded)
+        case .serif:
+            base = .system(size: block.fontSize, design: .serif)
+        }
+        if block.isBold { base = base.bold() }
+        if block.isItalic { base = base.italic() }
+        return base
+    }
+}
+
+private struct TransformableTextBlock: View {
+    @Bindable var page: NotePage
+    let index: Int
+    let block: TextAnnotation
+    let toolKind: InkToolKind
+    let isEditing: Bool
+    var onBeginEdit: () -> Void
+    var onPersist: () -> Void
+
+    @GestureState private var magnify: CGFloat = 1
+    @State private var dragOffset: CGSize = .zero
+
+    private var width: CGFloat { max(80, CGFloat(block.width) * magnify) }
+    private var height: CGFloat { max(44, CGFloat(block.height) * magnify) }
+
+    var body: some View {
+        Group {
+            if isEditing {
+                TextField(
+                    "在這裡輸入文字",
+                    text: textBinding,
+                    axis: .vertical
+                )
+                .font(TextAnnotationFont.font(for: block))
+                .foregroundStyle(Color(hex: block.colorHex))
+                .textFieldStyle(.plain)
+                .padding(8)
+                .background(textBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            } else {
+                Text(block.isPlaceholder && block.text.isEmpty ? "在這裡輸入文字" : block.text)
+                    .font(TextAnnotationFont.font(for: block))
+                    .foregroundStyle(block.isPlaceholder ? Color.secondary : Color(hex: block.colorHex))
+                    .frame(width: width, height: height, alignment: .topLeading)
+                    .padding(8)
+                    .background(textBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .onTapGesture(perform: onBeginEdit)
+            }
+        }
+        .frame(width: width, height: height, alignment: .topLeading)
+        .overlay {
+            if toolKind == .text || isEditing {
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.accentColor.opacity(isEditing ? 0.9 : 0.35), lineWidth: isEditing ? 2 : 1)
+            }
+        }
+        .position(
+            x: block.x + CGFloat(block.width) / 2 + dragOffset.width,
+            y: block.y + CGFloat(block.height) / 2 + dragOffset.height
+        )
+        .gesture(toolKind == .text || isEditing ? manipulation : nil)
+    }
+
+    @ViewBuilder
+    private var textBackground: some View {
+        if let hex = block.backgroundHex, !hex.isEmpty {
+            Color(hex: hex).opacity(0.92)
+        } else {
+            Color.clear
+        }
+    }
+
+    private var textBinding: Binding<String> {
+        Binding(
+            get: { page.overlays.texts[index].text },
+            set: { newValue in
+                var next = page.overlays
+                guard index < next.texts.count else { return }
+                next.texts[index].text = newValue
+                next.texts[index].isPlaceholder = false
+                page.overlays = next
+                onPersist()
+            }
+        )
+    }
+
+    private var manipulation: some Gesture {
+        SimultaneousGesture(
+            DragGesture()
+                .onChanged { dragOffset = $0.translation }
+                .onEnded { value in
+                    var next = page.overlays
+                    guard index < next.texts.count else { return }
+                    next.texts[index].x += Double(value.translation.width)
+                    next.texts[index].y += Double(value.translation.height)
+                    page.overlays = next
+                    dragOffset = .zero
+                    onPersist()
+                },
+            MagnificationGesture()
+                .updating($magnify) { current, state, _ in state = current }
+                .onEnded { scale in
+                    var next = page.overlays
+                    guard index < next.texts.count else { return }
+                    let factor = max(0.35, scale)
+                    next.texts[index].width = max(80, next.texts[index].width * factor)
+                    next.texts[index].height = max(44, next.texts[index].height * factor)
+                    next.texts[index].fontSize = min(48, max(12, next.texts[index].fontSize * Double(factor)))
+                    page.overlays = next
+                    onPersist()
+                }
         )
     }
 }
