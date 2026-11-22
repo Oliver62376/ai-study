@@ -44,7 +44,7 @@ import {
   IconTrash,
 } from './icons'
 import { HomeScreen, SettingsScreen } from './shell'
-import { listen, speak } from './speech'
+import { flushSpeakQueue, listen, speak, speakWhenDone } from './speech'
 import { consumeNativeClassBoot } from './native-bridge'
 import { loadPreferences, savePreferences, type AppPreferences } from './preferences'
 
@@ -81,6 +81,7 @@ export default function App() {
 
   const pagesRef = useRef<HTMLDivElement>(null)
   const replayTimers = useRef<number[]>([])
+  const replayRunId = useRef(0)
   const listenStop = useRef<null | (() => void) | (() => Promise<void>)>(null)
   const [draft, setDraft] = useState('')
   const [hint, setHint] = useState('')
@@ -370,27 +371,44 @@ export default function App() {
   function startReplay() {
     replayTimers.current.forEach((timer) => window.clearTimeout(timer))
     replayTimers.current = []
+    const runId = (replayRunId.current += 1)
     const events = state.events
+    if (!events.length) return
     dispatch({ type: 'replay-start' })
-    let acc = 240
-    let prev = events[0]?.t ?? 0
-    events.forEach((event, index) => {
-      if (index > 0) acc += Math.min(fast ? 40 : 1000, Math.max(fast ? 20 : 240, event.t - prev))
-      prev = event.t
-      const wait = acc
-      replayTimers.current.push(
-        window.setTimeout(() => {
-          dispatch({ type: 'replay-event', event })
-          if (!fast && event.type === 'say' && event.role === 'teacher') speak(event.text, () => {}, false)
-        }, wait),
-      )
-    })
-    replayTimers.current.push(window.setTimeout(() => dispatch({ type: 'replay-end' }), acc + (fast ? 60 : 600)))
+
+    const sleep = (ms: number) =>
+      new Promise<void>((resolve) => {
+        const id = window.setTimeout(resolve, ms)
+        replayTimers.current.push(id)
+      })
+
+    void (async () => {
+      await sleep(240)
+      let prevT = events[0]?.t ?? 0
+      for (let index = 0; index < events.length; index += 1) {
+        if (runId !== replayRunId.current) return
+        const event = events[index]!
+        if (index > 0) {
+          const delta = Math.min(fast ? 40 : 1000, Math.max(fast ? 20 : 240, event.t - prevT))
+          await sleep(delta)
+          prevT = event.t
+        }
+        if (runId !== replayRunId.current) return
+        dispatch({ type: 'replay-event', event })
+        if (!fast && event.type === 'say' && event.role === 'teacher' && event.text.trim()) {
+          await speakWhenDone(event.text, false)
+        }
+      }
+      if (runId !== replayRunId.current) return
+      dispatch({ type: 'replay-end' })
+    })()
   }
 
   function stopReplay() {
+    replayRunId.current += 1
     replayTimers.current.forEach((timer) => window.clearTimeout(timer))
     replayTimers.current = []
+    flushSpeakQueue()
     dispatch({ type: 'replay-end' })
   }
 

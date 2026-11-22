@@ -6,6 +6,7 @@ declare global {
   interface Window {
     __AI_STUDY_EMBEDDED__?: boolean
     __aiStudyTTSOnEnd?: () => void
+    __aiStudyTTSToken?: number
     webkit?: {
       messageHandlers?: {
         aiStudyTTS?: { postMessage: (body: unknown) => void }
@@ -31,6 +32,20 @@ function splitSentences(text: string) {
   return parts.length ? parts : [text]
 }
 
+let ttsSerial: Promise<void> = Promise.resolve()
+let ttsGen = 0
+let activeCancel: (() => void) | null = null
+
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => window.setTimeout(resolve, ms))
+}
+
+export function speakWhenDone(text: string, fast = false): Promise<void> {
+  return new Promise((resolve) => {
+    speak(text, resolve, fast)
+  })
+}
+
 function speakOnce(text: string, onend: () => void, fast: boolean) {
   if (fast) {
     const timer = window.setTimeout(onend, 80)
@@ -50,10 +65,14 @@ function speakOnce(text: string, onend: () => void, fast: boolean) {
     const prefs = loadPreferences()
 
     if (isEmbeddedNativeWebView()) {
+      const token = ++ttsGen
+      const ms = Math.min(300000, 15000 + text.length * 380)
       const watchdog = window.setTimeout(() => {
-        if (!settled) finish()
-      }, Math.min(120000, 8000 + text.length * 280))
+        if (!settled && window.__aiStudyTTSToken === token) finish()
+      }, ms)
+      window.__aiStudyTTSToken = token
       window.__aiStudyTTSOnEnd = () => {
+        if (window.__aiStudyTTSToken !== token) return
         window.clearTimeout(watchdog)
         finish()
       }
@@ -62,10 +81,12 @@ function speakOnce(text: string, onend: () => void, fast: boolean) {
         rate: prefs.ttsRate,
         pitch: prefs.ttsPitch,
         voice: prefs.ttsVoice,
+        token,
       })
       cancel = () => {
         settled = true
         window.clearTimeout(watchdog)
+        if (window.__aiStudyTTSToken === token) window.__aiStudyTTSToken = undefined
         window.webkit?.messageHandlers?.aiStudyTTSStop?.postMessage({})
       }
       return
@@ -141,13 +162,11 @@ function speakOnce(text: string, onend: () => void, fast: boolean) {
   }
 }
 
-export function speak(text: string, onend: () => void, fast: boolean) {
-  if (fast) return speakOnce(text, onend, true)
-
+function speakOnceChained(text: string, onend: () => void, fast: boolean) {
   const prefs = loadPreferences()
   const chunks = splitSentences(text)
   const gap = prefs.pauseAfterSentenceMs ?? 1500
-  if (chunks.length <= 1) return speakOnce(text, onend, false)
+  if (chunks.length <= 1) return speakOnce(text, onend, fast)
 
   let index = 0
   let currentCancel = () => {}
@@ -161,8 +180,8 @@ export function speak(text: string, onend: () => void, fast: boolean) {
     }
     const chunk = chunks[index++]!
     currentCancel = speakOnce(chunk, () => {
-      window.setTimeout(step, gap)
-    }, false)
+      void sleep(gap).then(step)
+    }, fast)
   }
 
   step()
@@ -171,6 +190,45 @@ export function speak(text: string, onend: () => void, fast: boolean) {
     closed = true
     currentCancel()
   }
+}
+
+/** 全域序列化朗讀，避免多段同時搶麥克風／提早 advance。 */
+export function speak(text: string, onend: () => void, fast: boolean) {
+  const run = () =>
+    new Promise<void>((resolve) => {
+      const done = () => {
+        onend()
+        resolve()
+      }
+      if (fast) {
+        activeCancel = speakOnce(text, done, true)
+        return
+      }
+      if (isEmbeddedNativeWebView()) {
+        activeCancel = speakOnce(text, done, false)
+        return
+      }
+      activeCancel = speakOnceChained(text, done, false)
+    })
+
+  ttsSerial = ttsSerial.then(run).catch(() => {})
+  const mySerial = ttsSerial
+
+  return () => {
+    if (ttsSerial === mySerial || activeCancel) {
+      activeCancel?.()
+      activeCancel = null
+    }
+  }
+}
+
+export function flushSpeakQueue() {
+  activeCancel?.()
+  activeCancel = null
+  ttsSerial = Promise.resolve()
+  ttsGen += 1
+  window.__aiStudyTTSToken = undefined
+  window.webkit?.messageHandlers?.aiStudyTTSStop?.postMessage({})
 }
 
 export async function listen(

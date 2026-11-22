@@ -6,6 +6,8 @@ final class WebSpeechBridge: NSObject, WKScriptMessageHandler, AVSpeechSynthesiz
     weak var webView: WKWebView?
     private let synth = AVSpeechSynthesizer()
     private var notifyEndOnFinish = true
+    private var utteranceQueue: [AVSpeechUtterance] = []
+    private var speakingFromQueue = false
 
     override init() {
         super.init()
@@ -51,16 +53,13 @@ final class WebSpeechBridge: NSObject, WKScriptMessageHandler, AVSpeechSynthesiz
                 ?? AVSpeechSynthesisVoice(language: "zh-CN") {
                 utterance.voice = zh
             }
-            if synth.isSpeaking {
-                notifyEndOnFinish = false
-                synth.stopSpeaking(at: .immediate)
-            }
-            notifyEndOnFinish = true
-            synth.speak(utterance)
+            utteranceQueue.append(utterance)
+            drainSpeakQueue()
         case "aiStudyTTSStop":
             notifyEndOnFinish = false
+            utteranceQueue.removeAll()
+            speakingFromQueue = false
             synth.stopSpeaking(at: .immediate)
-            notifyWebSpeakEnded()
         default:
             break
         }
@@ -70,12 +69,27 @@ final class WebSpeechBridge: NSObject, WKScriptMessageHandler, AVSpeechSynthesiz
         webView?.evaluateJavaScript("window.__aiStudyTTSOnEnd && window.__aiStudyTTSOnEnd()")
     }
 
+    private func drainSpeakQueue() {
+        guard !speakingFromQueue, !utteranceQueue.isEmpty else { return }
+        speakingFromQueue = true
+        notifyEndOnFinish = true
+        synth.speak(utteranceQueue.removeFirst())
+    }
+
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        speakingFromQueue = false
+        if !utteranceQueue.isEmpty {
+            drainSpeakQueue()
+            return
+        }
         guard notifyEndOnFinish else { return }
         notifyWebSpeakEnded()
     }
 
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
-        // stopSpeaking 會觸發 cancel；勿通知 Web，否則多句朗讀會亂序或無聲
+        speakingFromQueue = false
+        if !utteranceQueue.isEmpty {
+            drainSpeakQueue()
+        }
     }
 }
