@@ -20,6 +20,8 @@ import {
   uploadModeLabels,
   type AppPreferences,
   type HomeMode,
+  type LessonIntent,
+  lessonIntentLabels,
   type UploadMode,
   type NotebookPageNav,
 } from './preferences'
@@ -83,17 +85,29 @@ function AppTopBar({ children, onBack, title }: { children?: ReactNode; onBack?:
   )
 }
 
-function ModeSwitch({ mode, onChange }: { mode: HomeMode; onChange: (mode: HomeMode) => void }) {
+function IntentSwitch({ intent, onChange }: { intent: LessonIntent; onChange: (intent: LessonIntent) => void }) {
   return (
-    <div className="mode-switch" role="tablist" aria-label="上課模式">
-      <button type="button" role="tab" aria-selected={mode === 'board'} className={mode === 'board' ? 'on' : ''} onClick={() => onChange('board')}>
-        白板
-      </button>
-      <button type="button" role="tab" aria-selected={mode === 'chat'} className={mode === 'chat' ? 'on' : ''} onClick={() => onChange('chat')}>
-        Chat
-      </button>
+    <div className="mode-switch" role="tablist" aria-label="開課意圖">
+      {(['topic', 'exam', 'homework'] as const).map((key) => (
+        <button
+          key={key}
+          type="button"
+          role="tab"
+          aria-selected={intent === key}
+          className={intent === key ? 'on' : ''}
+          onClick={() => onChange(key)}
+        >
+          {lessonIntentLabels[key]}
+        </button>
+      ))}
     </div>
   )
+}
+
+const intentExamples: Record<LessonIntent, string[]> = {
+  topic: ['兩條曲線的交點在哪裡？', '導數到底在量什麼？', '橫波和縱波有什麼不同？'],
+  exam: ['明天考牛頓定律，幫我抓重點', '這份講義第 3 章會考什麼？'],
+  homework: ['解方程式 2x+5=13，不要直接給答案', '這題受力圖我不知道從哪畫起'],
 }
 
 export function HomeScreen({
@@ -120,7 +134,7 @@ export function HomeScreen({
   onEnterLesson: () => void
   onOpenLesson: (id: string) => void
   onDeleteLesson: (id: string) => void
-  onStartBoard: (topic: string, fileText: string, vision: VisionPage[]) => void
+  onStartBoard: (topic: string, fileText: string, vision: VisionPage[], intent: LessonIntent) => void
   onStartChat: (topic: string, fileText: string, vision: VisionPage[]) => void
   onSettings: () => void
   onNotebook: () => void
@@ -132,14 +146,27 @@ export function HomeScreen({
   const [visionPages, setVisionPages] = useState<VisionPage[]>([])
   const [chips, setChips] = useState<UploadChip[]>([])
   const [reading, setReading] = useState(false)
-  const [mode, setMode] = useState<HomeMode>(() => loadPreferences().homeMode)
+  const [intent, setIntent] = useState<LessonIntent>(() => loadPreferences().lessonIntent ?? 'topic')
   const canStart = topic.trim().length > 0 || fileText.trim().length > 0 || chips.some((chip) => chip.kind === 'image' || chip.kind === 'text')
 
-  function setHomeMode(next: HomeMode) {
-    setMode(next)
+  function setLessonIntent(next: LessonIntent) {
+    setIntent(next)
     const prefs = loadPreferences()
-    savePreferences({ ...prefs, homeMode: next })
+    savePreferences({ ...prefs, lessonIntent: next, homeMode: 'board' })
   }
+
+  const placeholder =
+    intent === 'homework'
+      ? '貼題目或描述你卡在哪一步…'
+      : intent === 'exam'
+        ? '明天考什麼？貼講義或範圍…'
+        : '你想搞懂哪個觀念？'
+  const heroSub =
+    intent === 'homework'
+      ? '作業模式：一次一個提示，家教會停下來等你試。'
+      : intent === 'exam'
+        ? '備考模式：重點、易錯點、再練題。'
+        : '主題模式：邊畫邊講，講完就問你一句。'
 
   function removeChip(id: string) {
     setChips((list) => list.filter((item) => item.id !== id))
@@ -202,10 +229,18 @@ export function HomeScreen({
         <main className="os-chat-main">
           <div className="os-hero">
             <h1 className="os-hero-title">今天想學什麼？</h1>
-            <p className="os-hero-sub">{mode === 'board' ? '白板模式：備課後用視覺化方式上課。' : 'Chat 模式：一般問答，不寫白板。'}</p>
+            <p className="os-hero-sub">{heroSub}</p>
           </div>
 
-          <ModeSwitch mode={mode} onChange={setHomeMode} />
+          <IntentSwitch intent={intent} onChange={setLessonIntent} />
+
+          <div className="intent-examples" aria-label="範例">
+            {intentExamples[intent].map((sample) => (
+              <button key={sample} type="button" className="intent-chip" onClick={() => setTopic(sample)}>
+                {sample}
+              </button>
+            ))}
+          </div>
 
           <div className="os-composer glass-composer">
             {chips.length > 0 && (
@@ -227,15 +262,14 @@ export function HomeScreen({
               className="os-composer-input"
               value={topic}
               rows={1}
-              placeholder="詢問任何科目"
+              placeholder={placeholder}
               disabled={planning}
               onChange={(event) => setTopic(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && !event.shiftKey && canStart && !planning) {
                   event.preventDefault()
                   if (!connected) onSettings()
-                  else if (mode === 'chat') onStartChat(topic.trim(), fileText.trim(), visionPages)
-                  else onStartBoard(topic.trim(), fileText.trim(), visionPages)
+                  else onStartBoard(topic.trim(), fileText.trim(), visionPages, intent)
                 }
               }}
             />
@@ -286,8 +320,7 @@ export function HomeScreen({
                     onSettings()
                     return
                   }
-                  if (mode === 'chat') onStartChat(topic.trim(), fileText.trim(), visionPages)
-                  else onStartBoard(topic.trim(), fileText.trim(), visionPages)
+                  onStartBoard(topic.trim(), fileText.trim(), visionPages, intent)
                 }}
               >
                 <IconSend />

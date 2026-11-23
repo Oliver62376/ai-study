@@ -1463,6 +1463,86 @@ button[aria-pressed="true"] {
 .settings-stack h2 { margin: 0 0 8px; font-size: 18px; }
 
 .hud-top { align-items: flex-end; flex-wrap: wrap; gap: 6px 10px; }
+
+.hud-top-minimal {
+  justify-content: flex-start;
+}
+
+.hud-waiting {
+  color: #8b3d00;
+  font-size: 13px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: rgba(255, 210, 120, 0.45);
+}
+
+.hud-more-toggle .hud-more-glyph {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.hud-more-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 0 12px 8px;
+  pointer-events: auto;
+}
+
+.intent-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.intent-chip {
+  border: 1px solid rgba(28, 25, 21, 0.2);
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #1c1915;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.intent-chip:hover {
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.plot-svg .axis {
+  stroke: #444;
+  stroke-width: 1.5;
+}
+
+.plot-svg .axis-label {
+  fill: #333;
+  font-size: 14px;
+}
+
+.plot-svg .plot-point {
+  fill: #c23b22;
+}
+
+.plot-svg .plot-point-label,
+.plot-svg .plot-label {
+  fill: #1c1915;
+  font-size: 13px;
+}
+
+.forces-svg .force-body {
+  fill: rgba(240, 236, 228, 0.95);
+  stroke: #2b2b2b;
+  stroke-width: 2;
+}
+
+.forces-svg .force-body-label,
+.forces-svg .force-label {
+  fill: #1c1915;
+  font-size: 14px;
+}
 .hud-tool { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 44px; }
 .hud-tool-label { font-size: 10px; color: #526158; line-height: 1.1; text-align: center; }
 

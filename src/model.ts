@@ -2,6 +2,72 @@ export type Role = 'teacher' | 'student'
 
 export type InkColor = 'default' | 'chalk' | 'blue' | 'red' | 'green'
 
+export type LessonIntent = 'topic' | 'exam' | 'homework'
+
+export interface PlotCurve {
+  fn: string
+  label?: string
+  color?: string
+}
+
+export interface PlotPoint {
+  x: number
+  y: number
+  label?: string
+}
+
+export interface PlotReveal {
+  type: 'plot'
+  id: string
+  page: number
+  xMin: number
+  xMax: number
+  yMin?: number
+  yMax?: number
+  curves?: PlotCurve[]
+  points?: PlotPoint[]
+  showAxes?: boolean
+  caption?: string
+  intent?: string
+}
+
+export interface ForceBody {
+  x: number
+  y: number
+  w: number
+  h: number
+  label?: string
+}
+
+export interface ForceArrow {
+  id: string
+  dx: number
+  dy: number
+  label: string
+  color?: string
+}
+
+export interface ForcesReveal {
+  type: 'forces'
+  id: string
+  page: number
+  body?: ForceBody
+  arrows: ForceArrow[]
+  caption?: string
+  intent?: string
+}
+
+export interface WaveParamsReveal {
+  type: 'wave'
+  id: string
+  page: number
+  amplitude?: number
+  wavelength?: number
+  phase?: number
+  marks?: string[]
+  caption?: string
+}
+
 export type Reveal =
   | { type: 'text'; id: string; page: number; text: string; variant: 'title' | 'body' | 'ink'; color?: InkColor }
   | { type: 'formula'; id: string; page: number; latex: string; plain: string }
@@ -14,7 +80,9 @@ export type Reveal =
       /** 這張圖想表達的教學意圖（給記憶庫／後續講解） */
       intent?: string
     }
-  | { type: 'wave'; id: string; page: number }
+  | PlotReveal
+  | ForcesReveal
+  | WaveParamsReveal
   | { type: 'mark'; id: string; page: number }
   | { type: 'anim'; id: string; page: number }
   | { type: 'lab'; id: string; page: number }
@@ -26,6 +94,8 @@ export interface Step {
   material: string
   reveals: Reveal[]
   lasers: string[]
+  /** 講完這一段後停下來等學生回應，再進下一段 */
+  waitForStudent?: boolean
 }
 
 export type Difficulty = 'easy' | 'mid' | 'hard'
@@ -80,6 +150,7 @@ export interface Job {
 export type Phase =
   | 'ready'
   | 'speaking'
+  | 'awaiting_student'
   | 'paused'
   | 'supplement'
   | 'quiz-ask'
@@ -98,6 +169,7 @@ export interface Course {
   title: string
   audience: string
   source: string
+  intent: LessonIntent
   sections: MaterialSection[]
   steps: Step[]
 }
@@ -176,6 +248,7 @@ export function loadState(): State {
     if (!raw) return freshState()
     const saved = JSON.parse(raw) as Persist
     if (!saved?.course || !Array.isArray(saved.course.steps) || saved.course.steps.length === 0) return freshState()
+    if (!saved.course.intent) saved.course.intent = 'topic'
     if (!Array.isArray(saved.reveals)) return freshState()
     return {
       ...freshState(),
@@ -234,6 +307,13 @@ function nextJob(state: State, kind: JobKind, text: string, extra?: Partial<Job>
 
 function withJob(state: State, job: Job, phase: Phase, patch: Partial<State> = {}): State {
   return { ...state, ...patch, phase, job, jobSeq: job.id }
+}
+
+function finishCaption(state: State) {
+  const intent = state.course?.intent
+  if (intent === 'homework') return '這一題的提示都講完了。若要完整解法，跟我說「直接給我答案」。'
+  if (intent === 'topic') return '這一段講完了。來幾題小測，或把重點再看一次。'
+  return '這一段教材講完了。可以進入測驗，或把白板存成 PDF。'
 }
 
 function beginStep(state: State, at: number): State {
@@ -334,6 +414,7 @@ export type Action =
   | { type: 'reveal'; reveal: Reveal; laser?: string | null; at: number }
   | { type: 'laser'; id: string | null; at: number }
   | { type: 'ask'; text: string; at: number; say?: string }
+  | { type: 'student-ready'; text: string; at: number }
   | { type: 'retell'; text: string }
   | { type: 'answer'; text: string; at: number }
   | { type: 'quiz'; at: number }
@@ -411,16 +492,29 @@ export function reduce(state: State, action: Action): State {
       }
       if (state.phase === 'speaking') {
         const flushed = state
-        const nextIndex = flushed.stepIndex + 1
-        if (nextIndex >= courseSteps(flushed).length) {
+        const steps = courseSteps(flushed)
+        const step = steps[flushed.stepIndex]
+        if (step?.waitForStudent) {
           return {
             ...flushed,
-            stepIndex: courseSteps(flushed).length,
+            phase: 'awaiting_student',
+            job: null,
+            laser: null,
+            caption: step.say.includes('？')
+              ? step.say
+              : `${step.say}（請在下方回答或試著畫出下一步，家教會等你。）`,
+          }
+        }
+        const nextIndex = flushed.stepIndex + 1
+        if (nextIndex >= steps.length) {
+          return {
+            ...flushed,
+            stepIndex: steps.length,
             finished: true,
             phase: 'done',
             job: null,
             laser: null,
-            caption: '這一段教材講完了。可以進入測驗，或把白板存成 PDF。',
+            caption: finishCaption(flushed),
           }
         }
         return beginStep({ ...flushed, stepIndex: nextIndex }, action.at)
@@ -463,10 +557,53 @@ export function reduce(state: State, action: Action): State {
         events: record(state, { t: action.at, type: 'laser', id: action.id }, action.at),
       }
     }
+    case 'student-ready': {
+      const text = action.text.trim()
+      if (!text || state.phase !== 'awaiting_student') return state
+      const withStudent: State = {
+        ...state,
+        transcript: appendLine(state.transcript, 'student', text),
+        events: record(state, { t: action.at, type: 'say', role: 'student', text }, action.at),
+      }
+      const steps = courseSteps(withStudent)
+      const nextIndex = withStudent.stepIndex + 1
+      if (nextIndex >= steps.length) {
+        return {
+          ...withStudent,
+          stepIndex: steps.length,
+          finished: true,
+          phase: 'done',
+          job: null,
+          laser: null,
+          caption: finishCaption(withStudent),
+        }
+      }
+      return beginStep({ ...withStudent, stepIndex: nextIndex }, action.at)
+    }
     case 'ask': {
       const text = action.text.trim()
       if (!text) return state
       if (state.phase === 'replay' || state.phase === 'quiz-ask' || state.phase === 'quiz-review') return state
+      if (state.phase === 'awaiting_student') {
+        const withStudent: State = {
+          ...state,
+          transcript: appendLine(state.transcript, 'student', text),
+          events: record(state, { t: action.at, type: 'say', role: 'student', text }, action.at),
+        }
+        const steps = courseSteps(withStudent)
+        const nextIndex = withStudent.stepIndex + 1
+        if (nextIndex >= steps.length) {
+          return {
+            ...withStudent,
+            stepIndex: steps.length,
+            finished: true,
+            phase: 'done',
+            job: null,
+            caption: finishCaption(withStudent),
+          }
+        }
+        return beginStep({ ...withStudent, stepIndex: nextIndex }, action.at)
+      }
       const armed = state.recording ? state : { ...state, recording: true, replayBoard: state.reveals }
       const withStudent: State = {
         ...armed,

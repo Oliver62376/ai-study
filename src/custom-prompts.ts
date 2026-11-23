@@ -1,6 +1,6 @@
 /** 使用者可改寫的提示詞；白板 JSON 工具規格始終由程式附加，不在此檔。 */
 
-export const APP_VERSION = '0.2.0'
+export const APP_VERSION = '0.3.9-beta'
 
 export type PromptSlot = 'plan' | 'chat' | 'notebook' | 'quiz' | 'teach'
 

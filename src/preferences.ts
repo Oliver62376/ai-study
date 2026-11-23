@@ -1,5 +1,6 @@
 export type UploadMode = 'text' | 'ocr' | 'vision'
 export type HomeMode = 'board' | 'chat'
+export type LessonIntent = 'topic' | 'exam' | 'homework'
 export type NotebookPageNav = 'vertical' | 'horizontal'
 export type MaterialPanelMode = 'material' | 'quiz' | 'notebook'
 
@@ -9,6 +10,7 @@ export interface AppPreferences {
   ttsPitch: number
   ttsVoice: string
   homeMode: HomeMode
+  lessonIntent: LessonIntent
   notebookPageNav: NotebookPageNav
   voiceAutoSend: boolean
   laserEnabled: boolean
@@ -27,6 +29,7 @@ export function defaultPreferences(): AppPreferences {
     ttsPitch: 1,
     ttsVoice: '',
     homeMode: 'board',
+    lessonIntent: 'topic',
     notebookPageNav: 'vertical',
     voiceAutoSend: false,
     laserEnabled: true,
@@ -50,6 +53,12 @@ export function loadPreferences(): AppPreferences {
 
 export function savePreferences(prefs: AppPreferences) {
   localStorage.setItem(KEY, JSON.stringify(prefs))
+}
+
+export const lessonIntentLabels: Record<LessonIntent, string> = {
+  topic: '主題',
+  exam: '備考',
+  homework: '作業',
 }
 
 export const uploadModeLabels: Record<UploadMode, string> = {

@@ -3,6 +3,8 @@ import katex from 'katex'
 import type { InkColor, Reveal } from './model'
 import { globalPalmGuard } from './pointer-stylus'
 import { sanitizeBoardSvg } from './svg-sanitize'
+import { ForcesFigure, ParamWaveFigure, PlotFigure } from './board-graphics'
+import type { ForcesReveal, PlotReveal, WaveParamsReveal } from './model'
 
 const inkClass: Record<InkColor, string> = {
   default: '',
@@ -320,7 +322,15 @@ export function Sheet({
                 intent={item.intent}
               />
             )
-          if (item.type === 'wave') return <WaveFigure key={item.id} reveals={reveals} />
+          if (item.type === 'plot') return <PlotFigure key={item.id} spec={item as PlotReveal} />
+          if (item.type === 'forces') return <ForcesFigure key={item.id} spec={item as ForcesReveal} />
+          if (item.type === 'wave') {
+            const wave = item as WaveParamsReveal
+            if (wave.amplitude != null || wave.wavelength != null || wave.marks?.length || wave.caption) {
+              return <ParamWaveFigure key={item.id} spec={wave} />
+            }
+            return <WaveFigure key={item.id} reveals={reveals} />
+          }
           if (item.type === 'anim') return <WaveAnim key={item.id} />
           if (item.type === 'lab') return <WaveLab key={item.id} />
           return null

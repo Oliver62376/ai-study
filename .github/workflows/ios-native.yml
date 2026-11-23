@@ -6,6 +6,10 @@ on:
     branches: [main, master]
     paths:
       - 'native/**'
+      - 'src/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'scripts/**'
       - '.github/workflows/ios-native.yml'
 
 jobs:

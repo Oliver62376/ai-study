@@ -46,7 +46,7 @@ import {
 import { HomeScreen, SettingsScreen } from './shell'
 import { flushSpeakQueue, listen, speak, speakWhenDone } from './speech'
 import { consumeNativeClassBoot } from './native-bridge'
-import { loadPreferences, savePreferences, type AppPreferences } from './preferences'
+import { loadPreferences, savePreferences, type AppPreferences, type LessonIntent } from './preferences'
 
 const fast = new URLSearchParams(window.location.search).has('fast')
 
@@ -109,6 +109,8 @@ export default function App() {
   const [glows, setGlows] = useState<Glow[]>([])
   const [planning, setPlanning] = useState(false)
   const [planError, setPlanError] = useState('')
+  const [hudMore, setHudMore] = useState(false)
+  const planIntentRef = useRef<LessonIntent>('topic')
   const [classPrefs, setClassPrefs] = useState<AppPreferences>(() => loadPreferences())
   const quizBack = useRef<'home' | 'class'>('home')
   const followedPage = useRef(0)
@@ -130,7 +132,9 @@ export default function App() {
     if (turn.highlights.length) setGlows((current) => [...current, ...turn.highlights])
     for (const reveal of turn.draws) {
       dispatch({ type: 'reveal', reveal, laser: laserFor(reveal), at: at() })
-      if (reveal.type === 'svg' && reveal.intent) rememberTeachingIntent(reveal.intent, courseTitle)
+      if ((reveal.type === 'svg' || reveal.type === 'plot' || reveal.type === 'forces') && 'intent' in reveal && reveal.intent) {
+        rememberTeachingIntent(reveal.intent, courseTitle)
+      }
     }
     if (turn.intent) rememberTeachingIntent(turn.intent, courseTitle)
     if (studentQuestion && turn.say.trim()) rememberStudentQuestion(studentQuestion, turn.say, courseTitle)
@@ -241,7 +245,7 @@ export default function App() {
         settings,
         `學生剛打斷你。只依這份教材回答，然後說要回到課程進度。需要時用螢光筆標出你指的位置。\n學生說：${outline}`,
         courseNow.sections.map((section) => `${section.title}\n${section.body}`).join('\n\n'),
-        boardToolPrompt(courseNow.title, anchors, courseNow.audience || gradeLabel()),
+        boardToolPrompt(courseNow.title, anchors, courseNow.audience || gradeLabel(), courseNow.intent ?? 'topic'),
       )
         .then((spoken) => {
           if (closed || !spoken) return
@@ -323,6 +327,7 @@ export default function App() {
 
   async function onSend(text = draft.trim()) {
     if (!text) return
+    const phaseBefore = stateRef.current.phase
     if (/測驗|考考|出題|練習/.test(text.replace(/\s+/g, ''))) {
       openQuiz('class')
       setDraft('')
@@ -334,6 +339,13 @@ export default function App() {
       dispatch({ type: 'ask', text, at: at() })
       const settings = loadSettings()
       const course = stateRef.current.course
+      if (phaseBefore === 'awaiting_student') {
+        setDraft('')
+        void listenStop.current?.()
+        listenStop.current = null
+        setListening(false)
+        return
+      }
       if (isConnected(settings) && course) {
         void (async () => {
           try {
@@ -345,7 +357,7 @@ export default function App() {
               settings,
               text,
               context,
-              boardToolPrompt(course.title, anchorsOf(stateRef.current.reveals), course.audience || gradeLabel()),
+              boardToolPrompt(course.title, anchorsOf(stateRef.current.reveals), course.audience || gradeLabel(), course.intent ?? 'topic'),
             )
             if (!raw) return
             const turn = parseTeacherTurn(raw, '')
@@ -436,7 +448,12 @@ export default function App() {
     }
   }
 
-  const speaking = state.phase === 'speaking' || state.phase === 'supplement' || state.phase === 'quiz-review' || state.phase === 'bridge'
+  const speaking =
+    state.phase === 'speaking' ||
+    state.phase === 'supplement' ||
+    state.phase === 'quiz-review' ||
+    state.phase === 'bridge'
+  const waitingStudent = state.phase === 'awaiting_student'
   const stepTotal = state.course?.steps.length ?? 0
   const progress = !stepTotal ? '尚未備課' : state.finished ? '講完' : `第 ${Math.min(state.stepIndex + 1, stepTotal)} / ${stepTotal} 段`
 
@@ -448,7 +465,8 @@ export default function App() {
     return t
   }
 
-  async function onPlan(topic: string, fileText: string, vision: VisionPage[] = visionRef.current) {
+  async function onPlan(topic: string, fileText: string, vision: VisionPage[] = visionRef.current, intent: LessonIntent = planIntentRef.current) {
+    planIntentRef.current = intent
     const source = buildPlanSource(topic, fileText)
     if (!source) {
       setPlanError('先輸入主題，或上傳檔案。')
@@ -467,14 +485,14 @@ export default function App() {
     try {
       const raw = await askProvider(
         settings,
-        planPrompt(source, audience),
+        planPrompt(source, audience, intent),
         source,
         '你只負責備課，只回 JSON，不要講課。科目由來源決定。',
         vision,
       )
       const course = raw ? parseCourse(raw, source, audience) : null
       if (!course) throw new Error('empty')
-      dispatch({ type: 'load-course', course, at: at() })
+      dispatch({ type: 'load-course', course: { ...course, intent }, at: at() })
       if (pendingLessonIdRef.current) setActiveLessonId(pendingLessonIdRef.current)
     } catch {
       setPlanError('備課沒有成功。確認 API 有回應，或把教材縮短再試。')
@@ -583,12 +601,12 @@ export default function App() {
           setLessons(loadLessons())
           if (id === activeLessonId) setActiveLessonId('')
         }}
-        onStartBoard={(topic, fileText, vision) => {
+        onStartBoard={(topic, fileText, vision, intent) => {
           visionRef.current = vision
           const id = `L${Date.now()}`
           pendingLessonIdRef.current = id
           setActiveLessonId(id)
-          void onPlan(topic, fileText, vision)
+          void onPlan(topic, fileText, vision, intent)
         }}
         onStartChat={onStartChat}
         onSettings={() => setScreen('settings')}
@@ -691,78 +709,93 @@ export default function App() {
       )}
       <section className="board-frame">
         <div className="board">
-          <div className="hud-top">
+          <div className="hud-top hud-top-minimal">
               <HudTool label="離開" onClick={() => { if (speaking) dispatch({ type: 'pause' }); setScreen('home') }}>
                 <IconHome />
               </HudTool>
-              <HudTool
-                label={fullscreen ? '教材' : '全螢幕'}
-                aria-pressed={fullscreen}
-                onClick={() => setFullscreen((value) => !value)}
-              >
-                <IconExpand />
-              </HudTool>
-              <HudTool label="測驗" onClick={() => openQuiz('class')} disabled={state.phase === 'replay'}>
-                <IconQuiz />
-              </HudTool>
-              <HudTool label="PDF" onClick={() => void onExport()} disabled={exporting || state.reveals.length === 0}>
-                <IconPdf />
-              </HudTool>
-              <HudTool
-                label={state.phase === 'replay' ? '停回放' : '回放'}
-                onClick={state.phase === 'replay' ? stopReplay : startReplay}
-                disabled={state.phase !== 'replay' && state.events.length === 0}
-                title={state.events.length === 0 ? '開課後會開始錄製' : undefined}
-              >
-                <IconReplay />
-              </HudTool>
               <span className="hud-progress">{progress}</span>
-              <HudTool label="螢光筆" aria-pressed={tool === 'pen'} onClick={() => setTool((value) => (value === 'pen' ? 'off' : 'pen'))}>
-                <IconHighlighter />
-              </HudTool>
-              <HudTool label="橡皮擦" aria-pressed={tool === 'erase'} onClick={() => setTool((value) => (value === 'erase' ? 'off' : 'erase'))}>
-                <IconEraser />
-              </HudTool>
+              {waitingStudent && <span className="hud-waiting">等你回答或試著畫…</span>}
               <HudTool
-                label="清本頁"
-                onClick={() => {
-                  setMarks((current) => current.filter((item) => item.page !== shownPage))
-                  setGlows((current) => current.filter((item) => item.page !== shownPage))
-                }}
+                label={hudMore ? '收起' : '工具'}
+                aria-pressed={hudMore}
+                className="hud-more-toggle"
+                onClick={() => setHudMore((value) => !value)}
               >
-                <IconTrash />
+                <span aria-hidden className="hud-more-glyph">
+                  ···
+                </span>
               </HudTool>
-              {tool === 'pen' && markerColors.map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  className="swatch"
-                  aria-label="螢光筆顏色"
-                  aria-pressed={marker === color}
-                  style={{ background: color }}
-                  onClick={() => setMarker(color)}
-                />
-              ))}
-              <label className="hud-inline" title="雷射筆">
-                <input
-                  type="checkbox"
-                  checked={classPrefs.laserEnabled}
-                  onChange={(event) => patchClassPrefs({ laserEnabled: event.target.checked })}
-                />
-                雷射
-              </label>
-              <label className="hud-inline hud-laser-size" title="雷射大小">
-                {classPrefs.laserSizePx}px
-                <input
-                  type="range"
-                  min={10}
-                  max={42}
-                  value={classPrefs.laserSizePx}
-                  disabled={!classPrefs.laserEnabled}
-                  onChange={(event) => patchClassPrefs({ laserSizePx: Number(event.target.value) })}
-                />
-              </label>
             </div>
+            {hudMore && (
+              <div className="hud-more-panel">
+                <HudTool
+                  label={fullscreen ? '教材' : '全螢幕'}
+                  aria-pressed={fullscreen}
+                  onClick={() => setFullscreen((value) => !value)}
+                >
+                  <IconExpand />
+                </HudTool>
+                <HudTool label="測驗" onClick={() => openQuiz('class')} disabled={state.phase === 'replay'}>
+                  <IconQuiz />
+                </HudTool>
+                <HudTool label="PDF" onClick={() => void onExport()} disabled={exporting || state.reveals.length === 0}>
+                  <IconPdf />
+                </HudTool>
+                <HudTool
+                  label={state.phase === 'replay' ? '停回放' : '回放'}
+                  onClick={state.phase === 'replay' ? stopReplay : startReplay}
+                  disabled={state.phase !== 'replay' && state.events.length === 0}
+                  title={state.events.length === 0 ? '開課後會開始錄製' : undefined}
+                >
+                  <IconReplay />
+                </HudTool>
+                <HudTool label="螢光筆" aria-pressed={tool === 'pen'} onClick={() => setTool((value) => (value === 'pen' ? 'off' : 'pen'))}>
+                  <IconHighlighter />
+                </HudTool>
+                <HudTool label="橡皮擦" aria-pressed={tool === 'erase'} onClick={() => setTool((value) => (value === 'erase' ? 'off' : 'erase'))}>
+                  <IconEraser />
+                </HudTool>
+                <HudTool
+                  label="清本頁"
+                  onClick={() => {
+                    setMarks((current) => current.filter((item) => item.page !== shownPage))
+                    setGlows((current) => current.filter((item) => item.page !== shownPage))
+                  }}
+                >
+                  <IconTrash />
+                </HudTool>
+                {tool === 'pen' && markerColors.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    className="swatch"
+                    aria-label="螢光筆顏色"
+                    aria-pressed={marker === color}
+                    style={{ background: color }}
+                    onClick={() => setMarker(color)}
+                  />
+                ))}
+                <label className="hud-inline" title="雷射筆">
+                  <input
+                    type="checkbox"
+                    checked={classPrefs.laserEnabled}
+                    onChange={(event) => patchClassPrefs({ laserEnabled: event.target.checked })}
+                  />
+                  雷射
+                </label>
+                <label className="hud-inline hud-laser-size" title="雷射大小">
+                  {classPrefs.laserSizePx}px
+                  <input
+                    type="range"
+                    min={10}
+                    max={42}
+                    value={classPrefs.laserSizePx}
+                    disabled={!classPrefs.laserEnabled}
+                    onChange={(event) => patchClassPrefs({ laserSizePx: Number(event.target.value) })}
+                  />
+                </label>
+              </div>
+            )}
             <div
               className="pages"
               ref={pagesRef}
@@ -795,7 +828,7 @@ export default function App() {
                   label={state.phase === 'paused' ? '繼續' : '開始'}
                   className="icon-btn"
                   onClick={play}
-                  disabled={speaking || (state.finished && state.phase !== 'paused')}
+                  disabled={speaking || waitingStudent || (state.finished && state.phase !== 'paused')}
                 >
                   <IconPlay />
                 </IconBtn>
@@ -814,7 +847,13 @@ export default function App() {
               <input
                 className="ask"
                 value={draft}
-                placeholder={state.phase === 'quiz-ask' ? '輸入答案' : '打斷、發問'}
+                placeholder={
+                  state.phase === 'quiz-ask'
+                    ? '輸入答案'
+                    : waitingStudent
+                      ? '試著回答或畫出下一步…'
+                      : '打斷、發問'
+                }
                 onChange={(event) => setDraft(event.target.value)}
                 onFocus={() => {
                   if (speaking) dispatch({ type: 'pause' })
