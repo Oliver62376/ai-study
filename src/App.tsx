@@ -7,12 +7,17 @@ import { deleteLesson, lessonById, loadLessons, syncLessonToNative, upsertLesson
 import { NotebookLibrary } from './notebook-hub'
 import { NotebookScreen } from './notebook-ui'
 import type { VisionPage } from './ocr'
-import { loadState, reduce, saveState, snapshot, type Persist, type State } from './model'
+import { loadState, reduce, saveState, snapshot, type Course, type Persist, type State } from './model'
 import { boardPdf, captureSheet, sharePdf } from './pdf'
 import {
   anchorsOf,
+  bindQuizAnchors,
   boardToolPrompt,
+  EXAM_MATERIAL_LABELS,
+  examQuizPrompt,
+  topicQuizPrompt,
   parseCourse,
+  parseQuiz,
   parseTeacherTurn,
   planPrompt,
   type TeacherTurn,
@@ -111,6 +116,14 @@ export default function App() {
   const [planError, setPlanError] = useState('')
   const [hudMore, setHudMore] = useState(false)
   const planIntentRef = useRef<LessonIntent>('topic')
+  const wrapQuizFetchedRef = useRef('')
+
+  function boardPromptExtras(course: Course) {
+    return {
+      homeworkUnlocked: stateRef.current.homeworkUnlocked,
+      lessonPlan: course.lessonPlan,
+    }
+  }
   const [classPrefs, setClassPrefs] = useState<AppPreferences>(() => loadPreferences())
   const quizBack = useRef<'home' | 'class'>('home')
   const followedPage = useRef(0)
@@ -206,6 +219,9 @@ export default function App() {
       })
     }
 
+    if (job.reviewHighlight) {
+      setGlows((current) => [...current, job.reviewHighlight!])
+    }
     if ((job.kind === 'review' || job.kind === 'supplement') && job.note) {
       const note = job.note
       timers.push(
@@ -245,7 +261,13 @@ export default function App() {
         settings,
         `學生剛打斷你。只依這份教材回答，然後說要回到課程進度。需要時用螢光筆標出你指的位置。\n學生說：${outline}`,
         courseNow.sections.map((section) => `${section.title}\n${section.body}`).join('\n\n'),
-        boardToolPrompt(courseNow.title, anchors, courseNow.audience || gradeLabel(), courseNow.intent ?? 'topic'),
+        boardToolPrompt(
+          courseNow.title,
+          anchors,
+          courseNow.audience || gradeLabel(),
+          courseNow.intent ?? 'topic',
+          boardPromptExtras(courseNow),
+        ),
       )
         .then((spoken) => {
           if (closed || !spoken) return
@@ -268,6 +290,41 @@ export default function App() {
       cancelSpeak()
     }
   }, [state.job?.id])
+
+  useEffect(() => {
+    const course = state.course
+    const intent = course?.intent
+    if (!course || (intent !== 'exam' && intent !== 'topic')) return
+    if (!state.finished || state.phase !== 'done') return
+    if (state.quizQueue.length > 0) return
+    if (course.quizQuestions?.length) return
+    const key = `${intent}-${course.title}-${state.stepIndex}-${state.reveals.length}`
+    if (wrapQuizFetchedRef.current === key) return
+    wrapQuizFetchedRef.current = key
+    const settings = loadSettings()
+    if (!isConnected(settings)) {
+      setHint(intent === 'exam' ? '備考講完了。接上模型後說「出題」。' : '講完了。接上模型後說「出題」。')
+      return
+    }
+    const material = course.sections.map((section) => `${section.title}\n${section.body}`).join('\n\n')
+    const anchors = anchorsOf(state.reveals)
+    const prompt =
+      intent === 'exam'
+        ? examQuizPrompt(course.audience || gradeLabel(), anchors, material, 4)
+        : topicQuizPrompt(course.audience || gradeLabel(), anchors, material, 3)
+    setHint(intent === 'exam' ? '正在出備考小測…' : '正在出主題小測…')
+    void askProvider(settings, prompt, material, '只出題，不要講課。')
+      .then((raw) => {
+        const qs = bindQuizAnchors(raw ? parseQuiz(raw) : [], anchors).slice(0, intent === 'exam' ? 5 : 4)
+        if (!qs.length) {
+          setHint('小測這次沒出成。可手動點工具列測驗。')
+          return
+        }
+        dispatch({ type: 'quiz-load', questions: qs, at: at() })
+        setHint('')
+      })
+      .catch(() => setHint('小測連線失敗。稍後再試或手動出題。'))
+  }, [state.phase, state.finished, state.course, state.stepIndex, state.reveals.length, state.quizQueue.length])
 
   useEffect(() => () => {
     replayTimers.current.forEach((timer) => window.clearTimeout(timer))
@@ -336,9 +393,12 @@ export default function App() {
     if (state.phase === 'quiz-ask') {
       dispatch({ type: 'answer', text, at: at() })
     } else {
+      const course = stateRef.current.course
+      if (course?.intent === 'homework' && /直接|完整解法|給我答案|看解答/.test(text.replace(/\s+/g, ''))) {
+        dispatch({ type: 'homework-unlock', at: at() })
+      }
       dispatch({ type: 'ask', text, at: at() })
       const settings = loadSettings()
-      const course = stateRef.current.course
       if (phaseBefore === 'awaiting_student') {
         setDraft('')
         void listenStop.current?.()
@@ -357,7 +417,13 @@ export default function App() {
               settings,
               text,
               context,
-              boardToolPrompt(course.title, anchorsOf(stateRef.current.reveals), course.audience || gradeLabel(), course.intent ?? 'topic'),
+              boardToolPrompt(
+                course.title,
+                anchorsOf(stateRef.current.reveals),
+                course.audience || gradeLabel(),
+                course.intent ?? 'topic',
+                boardPromptExtras(course),
+              ),
             )
             if (!raw) return
             const turn = parseTeacherTurn(raw, '')
@@ -455,7 +521,26 @@ export default function App() {
     state.phase === 'bridge'
   const waitingStudent = state.phase === 'awaiting_student'
   const stepTotal = state.course?.steps.length ?? 0
-  const progress = !stepTotal ? '尚未備課' : state.finished ? '講完' : `第 ${Math.min(state.stepIndex + 1, stepTotal)} / ${stepTotal} 段`
+  const examMaterial = state.course?.intent === 'exam' ? state.course.steps[state.stepIndex]?.material : ''
+  const examLabel = examMaterial && EXAM_MATERIAL_LABELS[examMaterial] ? `·${EXAM_MATERIAL_LABELS[examMaterial]}` : ''
+  const progress =
+    !stepTotal
+      ? '尚未備課'
+      : state.phase === 'quiz-ask' || state.phase === 'quiz-review'
+        ? state.course?.intent === 'exam'
+          ? `備考小測 ${state.quizIndex + 1} / ${state.quizQueue.length || '?'}`
+          : `小測 ${state.quizIndex + 1} / ${state.quizQueue.length || '?'}`
+        : state.finished && (state.course?.intent === 'exam' || state.course?.intent === 'topic') && !state.quizQueue.length
+          ? state.course?.intent === 'exam'
+            ? '備考·收尾'
+            : '主題·收尾'
+          : state.finished
+            ? '講完'
+            : state.course?.intent === 'exam'
+              ? `備考${examLabel} ${Math.min(state.stepIndex + 1, stepTotal)} / ${stepTotal}`
+              : state.course?.intent === 'topic'
+                ? `主題 ${Math.min(state.stepIndex + 1, stepTotal)} / ${stepTotal}`
+                : `第 ${Math.min(state.stepIndex + 1, stepTotal)} / ${stepTotal} 段`
 
   function buildPlanSource(topic: string, fileText: string) {
     const t = topic.trim()

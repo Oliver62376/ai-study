@@ -1,3 +1,5 @@
+import { upsertReveal } from './reveal-merge'
+
 export type Role = 'teacher' | 'student'
 
 export type InkColor = 'default' | 'chalk' | 'blue' | 'red' | 'green'
@@ -145,6 +147,8 @@ export interface Job {
   text: string
   note?: Reveal
   laser?: string | null
+  /** 備考錯題時螢光標回板書 */
+  reviewHighlight?: { page: number; anchor: string; color: string }
 }
 
 export type Phase =
@@ -172,6 +176,10 @@ export interface Course {
   intent: LessonIntent
   sections: MaterialSection[]
   steps: Step[]
+  /** 學生看不見的備課教案摘要，供家教對齊解法順序 */
+  lessonPlan?: string
+  /** 備考／主題課收尾小測（備課內嵌或講完後由 App 補出） */
+  quizQuestions?: QuizQ[]
 }
 
 export function courseSteps(state: { course: Course | null }) {
@@ -204,6 +212,8 @@ export interface State extends Persist {
   quizIndex: number
   quizAnswers: QuizItem[]
   replaySnap: Persist | null
+  /** 作業模式：學生要求後才允許畫完整解法 */
+  homeworkUnlocked: boolean
 }
 
 export const emptyPersist = (): Persist => ({
@@ -233,6 +243,7 @@ export function freshState(): State {
     quizIndex: 0,
     quizAnswers: [],
     replaySnap: null,
+    homeworkUnlocked: false,
   }
 }
 
@@ -312,8 +323,67 @@ function withJob(state: State, job: Job, phase: Phase, patch: Partial<State> = {
 function finishCaption(state: State) {
   const intent = state.course?.intent
   if (intent === 'homework') return '這一題的提示都講完了。若要完整解法，跟我說「直接給我答案」。'
-  if (intent === 'topic') return '這一段講完了。來幾題小測，或把重點再看一次。'
+  if (intent === 'topic') return '觀念講完了，正在準備小測…'
+  if (intent === 'exam') return '考點與易錯都講過了。正在準備備考小測…'
   return '這一段教材講完了。可以進入測驗，或把白板存成 PDF。'
+}
+
+function examQuizBridgeSay() {
+  return '重點與易錯都講過了。接下來做備考小測；答錯我會指回白板上的圖。'
+}
+
+function topicQuizBridgeSay() {
+  return '這個觀念講完了。來幾題小測；答錯我會指回剛才白板上的地方。'
+}
+
+function finishExamQuizCaption(correct: number, total: number) {
+  if (correct === total) return `備考小測全對（${total} 題）。照這個節奏進考場。`
+  return `備考小測結束：${correct} / ${total} 題。錯題已標在白板，考前再掃一次易錯處。`
+}
+
+function finishTopicQuizCaption(correct: number, total: number) {
+  if (correct === total) return `小測全對（${total} 題）。這個觀念你掌握了。`
+  return `小測結束：${correct} / ${total} 題。錯題已標在板上，再看一次圖示與註記。`
+}
+
+function endLecture(state: State, at: number): State {
+  const steps = courseSteps(state)
+  const base: State = {
+    ...state,
+    stepIndex: steps.length,
+    finished: true,
+    job: null,
+    laser: null,
+  }
+  const qs = base.course?.quizQuestions ?? []
+  const wrapIntent = base.course?.intent
+  if ((wrapIntent === 'exam' || wrapIntent === 'topic') && qs.length > 0) {
+    const say = wrapIntent === 'exam' ? examQuizBridgeSay() : topicQuizBridgeSay()
+    const job = nextJob(base, 'bridge', say)
+    return withJob(
+      {
+        ...base,
+        quizQueue: qs,
+        quizIndex: 0,
+        quizAnswers: [],
+        transcript: appendLine(base.transcript, 'teacher', say),
+        events: record(base, { t: at, type: 'say', role: 'teacher', text: say }, at),
+      },
+      job,
+      'bridge',
+      { caption: say, laser: null },
+    )
+  }
+  return { ...base, phase: 'done', caption: finishCaption(base) }
+}
+
+function startInlineExamQuiz(state: State, at: number): State {
+  const qs = state.quizQueue
+  if (!qs.length) return { ...state, phase: 'done', caption: finishCaption(state) }
+  const first = qs[0]
+  const say = '請聽題，直接在下面回答。'
+  const job = nextJob(state, 'bridge', say)
+  return withJob(state, job, 'quiz-ask', { caption: first.prompt, laser: first.laser ?? null })
 }
 
 function beginStep(state: State, at: number): State {
@@ -325,7 +395,7 @@ function beginStep(state: State, at: number): State {
       finished: true,
       job: null,
       laser: null,
-      caption: '這一段教材講完了。',
+      caption: finishCaption(state),
     }
   }
   const step = steps[state.stepIndex]
@@ -386,6 +456,8 @@ function startQuiz(state: State, at: number): State {
 
 function finishQuiz(state: State, at: number): State {
   const session = { items: state.quizAnswers }
+  const correct = state.quizAnswers.filter((item) => item.correct).length
+  const total = state.quizAnswers.length
   const base: State = {
     ...state,
     quizLog: [...state.quizLog, session],
@@ -394,7 +466,13 @@ function finishQuiz(state: State, at: number): State {
     quizAnswers: [],
   }
   if (base.finished || base.stepIndex >= courseSteps(base).length) {
-    return { ...base, phase: 'done', job: null, caption: '檢討結束，課程也已經講完。' }
+    const caption =
+      base.course?.intent === 'exam'
+        ? finishExamQuizCaption(correct, total)
+        : base.course?.intent === 'topic'
+          ? finishTopicQuizCaption(correct, total)
+          : '檢討結束，課程也已經講完。'
+    return { ...base, phase: 'done', job: null, caption }
   }
   const say = '檢討結束，回到剛才還沒講完的地方。'
   const primed: State = {
@@ -424,19 +502,26 @@ export type Action =
   | { type: 'load-course'; course: Course; at: number }
   | { type: 'restore-lesson'; persist: Persist; at: number }
   | { type: 'quiz-load'; questions: QuizQ[]; at: number }
+  | { type: 'homework-unlock'; at: number }
   | { type: 'replay-start' }
   | { type: 'replay-event'; event: RecEvent }
   | { type: 'replay-end' }
 
+function applyReveal(state: State, reveal: Reveal, at: number): State {
+  const { reveals, merged } = upsertReveal(state.reveals, reveal)
+  if (reveals === state.reveals) return state
+  const stored = merged ? reveals.find((item) => item.id === reveal.id) ?? reveal : reveal
+  return {
+    ...state,
+    reveals,
+    events: record(state, { t: at, type: 'reveal', reveal: stored }, at),
+  }
+}
+
 function flushReveals(state: State, incoming: Reveal[], at: number): State {
   let next = state
   for (const reveal of incoming) {
-    if (hasId(next.reveals, reveal.id)) continue
-    next = {
-      ...next,
-      reveals: [...next.reveals, reveal],
-      events: record(next, { t: at, type: 'reveal', reveal }, at),
-    }
+    next = applyReveal(next, reveal, at)
   }
   return next
 }
@@ -506,21 +591,19 @@ export function reduce(state: State, action: Action): State {
           }
         }
         const nextIndex = flushed.stepIndex + 1
-        if (nextIndex >= steps.length) {
-          return {
-            ...flushed,
-            stepIndex: steps.length,
-            finished: true,
-            phase: 'done',
-            job: null,
-            laser: null,
-            caption: finishCaption(flushed),
-          }
-        }
+        if (nextIndex >= steps.length) return endLecture(flushed, action.at)
         return beginStep({ ...flushed, stepIndex: nextIndex }, action.at)
       }
       if (state.phase === 'supplement' || state.phase === 'bridge') {
         const flushed = state.job?.note ? flushReveals(state, [state.job.note], action.at) : state
+        if (
+          (flushed.course?.intent === 'exam' || flushed.course?.intent === 'topic') &&
+          flushed.finished &&
+          flushed.quizQueue.length > 0 &&
+          flushed.phase === 'bridge'
+        ) {
+          return startInlineExamQuiz(flushed, action.at)
+        }
         if (flushed.finished || flushed.stepIndex >= courseSteps(flushed).length) {
           return { ...flushed, phase: 'done', job: null, caption: '補充結束。課程先前已經講完。' }
         }
@@ -536,16 +619,19 @@ export function reduce(state: State, action: Action): State {
     }
     case 'reveal': {
       if (state.phase === 'replay') return state
-      const exists = hasId(state.reveals, action.reveal.id)
       const laser = action.laser === undefined ? state.laser : action.laser
-      if (exists) {
-        return laser === state.laser ? state : { ...state, laser }
-      }
+      const next = applyReveal(state, action.reveal, action.at)
+      return { ...next, laser }
+    }
+    case 'homework-unlock': {
+      if (state.course?.intent !== 'homework') return state
+      const say = '好，你要看完整解法。我會把步驟都畫在板上。'
       return {
         ...state,
-        reveals: [...state.reveals, action.reveal],
-        laser,
-        events: record(state, { t: action.at, type: 'reveal', reveal: action.reveal }, action.at),
+        homeworkUnlocked: true,
+        caption: say,
+        transcript: appendLine(state.transcript, 'teacher', say),
+        events: record(state, { t: action.at, type: 'say', role: 'teacher', text: say }, action.at),
       }
     }
     case 'laser': {
@@ -567,17 +653,7 @@ export function reduce(state: State, action: Action): State {
       }
       const steps = courseSteps(withStudent)
       const nextIndex = withStudent.stepIndex + 1
-      if (nextIndex >= steps.length) {
-        return {
-          ...withStudent,
-          stepIndex: steps.length,
-          finished: true,
-          phase: 'done',
-          job: null,
-          laser: null,
-          caption: finishCaption(withStudent),
-        }
-      }
+      if (nextIndex >= steps.length) return endLecture(withStudent, action.at)
       return beginStep({ ...withStudent, stepIndex: nextIndex }, action.at)
     }
     case 'ask': {
@@ -592,16 +668,7 @@ export function reduce(state: State, action: Action): State {
         }
         const steps = courseSteps(withStudent)
         const nextIndex = withStudent.stepIndex + 1
-        if (nextIndex >= steps.length) {
-          return {
-            ...withStudent,
-            stepIndex: steps.length,
-            finished: true,
-            phase: 'done',
-            job: null,
-            caption: finishCaption(withStudent),
-          }
-        }
+        if (nextIndex >= steps.length) return endLecture(withStudent, action.at)
         return beginStep({ ...withStudent, stepIndex: nextIndex }, action.at)
       }
       const armed = state.recording ? state : { ...state, recording: true, replayBoard: state.reveals }
@@ -641,9 +708,17 @@ export function reduce(state: State, action: Action): State {
         anchor: q.anchor,
         text: q.note,
       }
-      const explain = `${correct ? '這題答對了。' : '這題我們改一下。'}${q.explain}`
+      const examWrong =
+        !correct && state.course?.intent === 'exam' && q.anchor
+          ? `這題容易踩到剛才的易錯點。請看白板上「${q.anchor}」那一帶。`
+          : '這題我們改一下。'
+      const explain = `${correct ? '這題答對了。' : examWrong}${q.explain}`
       const item: QuizItem = { id: q.id, prompt: q.prompt, answer: text, correct, explain: q.explain }
-      const job = nextJob(state, 'review', explain, { note, laser: q.laser })
+      const reviewExtra: Partial<Job> = { note, laser: q.laser }
+      if (!correct && (state.course?.intent === 'exam' || state.course?.intent === 'topic') && q.anchor) {
+        reviewExtra.reviewHighlight = { page: q.page, anchor: q.anchor, color: 'pink' }
+      }
+      const job = nextJob(state, 'review', explain, reviewExtra)
       return withJob(
         {
           ...state,
@@ -687,6 +762,7 @@ export function reduce(state: State, action: Action): State {
           recording: true,
           replayBoard: [],
           events: [],
+          homeworkUnlocked: false,
         },
         action.at,
       )

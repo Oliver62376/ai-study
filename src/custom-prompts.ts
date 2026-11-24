@@ -1,6 +1,6 @@
 /** 使用者可改寫的提示詞；白板 JSON 工具規格始終由程式附加，不在此檔。 */
 
-export const APP_VERSION = '0.3.9-beta'
+export const APP_VERSION = '0.3.10-beta'
 
 export type PromptSlot = 'plan' | 'chat' | 'notebook' | 'quiz' | 'teach'
 
@@ -58,11 +58,11 @@ export const promptTemplateFiles: Record<PromptSlot, string> = {
 export function templateBody(slot: PromptSlot): string {
   const hint = '（可留空；白板 JSON 工具指令由 App 自動附加，請勿寫在這裡。）\n\n'
   const samples: Record<PromptSlot, string> = {
-    plan: `${hint}例：多用在生活中舉例，每一步板書少字；需要示意時用 diagram.svg 畫箭頭／圖形，並寫 intent 教學意圖。`,
+    plan: `${hint}例：家教節奏、板書少字；函數／受力用 plot、forces 資料，非 SVG 曲線；備考用 focus/traps/drill 三段。`,
     chat: `${hint}例：回答先用一句結論，再給步驟，適合國中自學；可引用記憶庫中的學習背景。`,
     notebook: `${hint}例：解釋手寫時假設學生基礎弱，多提醒易錯點。`,
     quiz: `${hint}例：題目情境化，避免純定義背誦。`,
-    teach: `${hint}例：語氣像耐心班導；學生卡住時可用 draws 畫小 SVG 示意，並用 teachingIntent 說明這張圖的目的。`,
+    teach: `${hint}例：語氣像對面家教；精算圖用 plot/forces；示意才用 svg；優先螢光筆標既有圖。`,
   }
   return samples[slot]
 }
@@ -76,7 +76,7 @@ export function readmePromptText(appVersion: string) {
     '',
     '【永遠由 App 內建、不需也不應寫入 txt】',
     '- 白板講課的 JSON 格式（say、highlights、draws／SVG）',
-    '- 備課課程結構 JSON（sections、steps、reveals、diagram.svg）',
+    '- 備課 JSON（lessonPlan、plot/forces/wave、quizQuestions、三種 intent）',
     '- 測驗題目 JSON（questions）',
     '- 記憶庫條目（在設定 → 記憶庫管理；備課／講課會自動注入）',
     '',

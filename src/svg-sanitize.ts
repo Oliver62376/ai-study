@@ -1,3 +1,15 @@
+/** 疑似手繪函數／坐標圖的 SVG，應改用 plot／forces 資料型別。 */
+export function svgRejectedForComputedPlot(raw: string): boolean {
+  const lower = raw.toLowerCase()
+  const coordPairs = lower.match(/[-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+/g) ?? []
+  if (coordPairs.length >= 28) return true
+  const pathD = lower.match(/d="[^"]+"/g) ?? []
+  const pathChars = pathD.join('').length
+  if (pathChars > 400 && /<path/i.test(lower)) return true
+  if (/<line/i.test(lower) && coordPairs.length >= 8 && /viewbox/i.test(lower)) return true
+  return false
+}
+
 /** 白板用：只允許靜態示意 SVG，擋 script / 事件屬性。 */
 export function sanitizeBoardSvg(raw: string): string | null {
   const trimmed = raw.trim()

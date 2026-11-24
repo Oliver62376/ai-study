@@ -15,7 +15,7 @@ import type {
   Reveal,
   Step,
 } from './model'
-import { sanitizeBoardSvg } from './svg-sanitize'
+import { sanitizeBoardSvg, svgRejectedForComputedPlot } from './svg-sanitize'
 
 const colors = new Set(['yellow', 'green', 'pink'])
 const inkColors = new Set<InkColor>(['default', 'chalk', 'blue', 'red', 'green'])
@@ -53,8 +53,14 @@ const planComputedDoc = [
   'svg／diagram 只留給非數學精準的示意。',
 ].join('\n')
 
-function intentRules(intent: LessonIntent): string[] {
+function intentRules(intent: LessonIntent, homeworkUnlocked = false): string[] {
   if (intent === 'homework') {
+    if (homeworkUnlocked) {
+      return [
+        '學生已要求完整解法。可以把剩餘步驟畫在板上，但仍要一步一步 reveal，邊畫邊講。',
+        '函數／受力用 plot、forces，不要 SVG 瞎畫曲線。',
+      ]
+    }
     return [
       '這是作業家教模式：禁止在一開始就給最終答案或寫出最後數值。',
       '每一步只給一個提示，並用 waitForStudent:true 停下來等學生試。',
@@ -63,7 +69,11 @@ function intentRules(intent: LessonIntent): string[] {
     ]
   }
   if (intent === 'exam') {
-    return ['備考模式：抓重點、易錯、速解步驟；每個易錯點要畫出來或標在圖上。']
+    return [
+      '備考模式：照「考點重點 → 易錯點 → 速解練習」順序講，不要跳著背。',
+      '易錯段落每一步至少一個 plot、forces 或 svg 圖，並給穩定 id（例如 trap1、g2），供小測錯題指回。',
+      '禁止易錯只寫一行字不畫圖。',
+    ]
   }
   return [
     '主題模式：講一個小觀念就問一句，多數 steps 設 waitForStudent:true。',
@@ -71,12 +81,25 @@ function intentRules(intent: LessonIntent): string[] {
   ]
 }
 
-export function boardToolPrompt(title: string, anchors: string[], audience: string, intent: LessonIntent = 'topic') {
+export interface BoardPromptOptions {
+  homeworkUnlocked?: boolean
+  lessonPlan?: string
+}
+
+export function boardToolPrompt(
+  title: string,
+  anchors: string[],
+  audience: string,
+  intent: LessonIntent = 'topic',
+  options: BoardPromptOptions = {},
+) {
   const who = audience.trim() ? `教學對象：${audience.trim()}。用詞與例子要符合這個年級。` : ''
   const mem = memoryContextForPrompt(1400)
+  const plan = options.lessonPlan?.trim() ? `（內部教案，不要念給學生聽）\n${options.lessonPlan.trim().slice(0, 1200)}` : ''
   const core = [
     `你是坐在對面的白板家教，正在帶「${title || '這一課'}」。邊講邊畫，一次一個步驟。${who}`,
-    ...intentRules(intent),
+    plan,
+    ...intentRules(intent, options.homeworkUnlocked),
     '回覆必須是一個 JSON 物件，不要加 markdown。',
     '{"say":"要念出來的話","highlights":[{"page":0,"anchor":"某個已存在的id","color":"yellow"}],"draws":[],"teachingIntent":"可選"}',
     'say：兩到五句，適合念出來；先說要看哪裡，再解釋。可問學生一句並停下等他。',
@@ -92,19 +115,51 @@ export function boardToolPrompt(title: string, anchors: string[], audience: stri
   return appendExtra(core, loadCustomPrompts().teach, '講課風格補充')
 }
 
+export const EXAM_SECTION_IDS = ['focus', 'traps', 'drill'] as const
+
+export const EXAM_MATERIAL_LABELS: Record<string, string> = {
+  focus: '考點',
+  traps: '易錯',
+  drill: '速解',
+}
+
+function examPlanBlock() {
+  return [
+    '備考課固定三個 section（id 必須完全一致）：',
+    '{"id":"focus","title":"考點重點","body":"…"},{"id":"traps","title":"易錯點","body":"…"},{"id":"drill","title":"速解練習","body":"…"}',
+    'steps 順序：先若干段 material 為 focus（考點）→ 若干段 material 為 traps（易錯，必須有 plot/forces/svg）→ 若干段 material 為 drill（速解套路）。至少 8 段。',
+    'quizQuestions：3～5 題備考小測，每題要有 anchor、laser（必須是 steps 裡出現過的 reveal id，優先 traps 段）、page。',
+    '{"quizQuestions":[{"prompt":"題目","kind":"choice","choices":["A","B","C"],"accept":["A"],"explain":"一句檢討","anchor":"trap1","laser":"trap1","page":0}]}',
+  ].join('\n')
+}
+
 export function planPrompt(source: string, audience: string, intent: LessonIntent = 'topic') {
   const who = audience.trim() ? `教學對象：${audience.trim()}。用詞、例子、步調要符合這個年級。` : '教學對象沒有指定，依來源自己判斷。'
   const mem = memoryContextForPrompt(1800)
+  const examExample =
+    '{"title":"牛頓定律備考","intent":"exam","sections":[{"id":"focus","title":"考點重點","body":"…"},{"id":"traps","title":"易錯點","body":"…"},{"id":"drill","title":"速解練習","body":"…"}],"steps":[{"id":"p1","say":"…","material":"focus","reveals":[{"type":"text","id":"k1","page":0,"variant":"title","text":"考點"}]}],"quizQuestions":[{"prompt":"…","kind":"choice","choices":["A","B","C"],"accept":["A"],"explain":"…","anchor":"trap1","laser":"trap1","page":0}]}'
   const base = [
     '把下面的來源編成一堂「白板家教」課程：先在心裡寫完整解法與圖的順序，再拆成多個短 steps 輸出。不要整頁塞滿。',
     `intent 欄位固定為 "${intent}"。`,
     who,
     ...intentRules(intent),
     '只回 JSON，不要 markdown。',
-    '{"title":"課名","intent":"topic","sections":[{"id":"s1","title":"小標","body":"教材摘要"}],"steps":[{"id":"p1","say":"口語＋問句","material":"s1","waitForStudent":true,"reveals":[{"type":"text","id":"t1","page":0,"variant":"ink","text":"第一步"}]}]}',
-    intent === 'homework' ? '6 到 14 個短步驟，每步一個提示；最後一步以前不可出現最終答案。' : '4 到 10 段。每段 1 到 4 個板書元素。',
+    intent === 'exam'
+      ? examExample
+      : '{"title":"課名","intent":"topic","sections":[{"id":"s1","title":"小標","body":"教材摘要"}],"steps":[{"id":"p1","say":"口語＋問句","material":"s1","waitForStudent":true,"reveals":[{"type":"text","id":"t1","page":0,"variant":"ink","text":"第一步"}]}]}',
+    'lessonPlan：必填，繁體，學生看不到。寫完整解法／易錯／圖的出現順序，供你自家對齊，不要印上板。',
+    intent === 'homework'
+      ? '6 到 14 個短步驟，每步一個提示；最後一步以前不可出現最終答案。'
+      : intent === 'exam'
+        ? examPlanBlock()
+        : intent === 'topic'
+          ? [
+              '主題課：4 到 10 段。多數 steps 設 waitForStudent:true，say 裡要有問句。',
+              'quizQuestions：2～4 題小測，anchor／laser 對應板上圖或重點文字 id。',
+            ].join('\n')
+          : '4 到 10 段。每段 1 到 4 個板書元素。',
     'page 從 0 起。同一張圖拆多段 reveal，講到才出現。',
-    'waitForStudent：true 表示這段講完要停下來等學生回應（作業與主題課多用 true）。',
+    'waitForStudent：true 表示這段講完要停下來等學生回應（作業與主題課多用 true；備考 traps 段可 false 以加快）。',
     'text：variant 為 title、body、ink。color 可為 chalk、blue、red、green、default。',
     planComputedDoc,
     'formula：需要時使用。',
@@ -241,6 +296,7 @@ function parseSvgReveal(row: Record<string, unknown>, seen: Set<string>, pageRaw
   let id = typeof row.id === 'string' && row.id.trim() ? row.id.trim() : ''
   if (!id || seen.has(id)) id = `svg${seen.size + 1}`
   const svgRaw = typeof row.svg === 'string' ? row.svg : ''
+  if (svgRaw && svgRejectedForComputedPlot(svgRaw)) return null
   const safe = svgRaw ? sanitizeBoardSvg(svgRaw) : null
   if (!safe) return null
   seen.add(id)
@@ -284,7 +340,14 @@ export function parseCourse(raw: string, source: string, audience: string): Cour
   const match = raw.match(/\{[\s\S]*\}/)
   if (!match) return null
   try {
-    const data = JSON.parse(match[0]) as { title?: unknown; sections?: unknown; steps?: unknown; intent?: unknown }
+    const data = JSON.parse(match[0]) as {
+      title?: unknown
+      sections?: unknown
+      steps?: unknown
+      intent?: unknown
+      lessonPlan?: unknown
+      quizQuestions?: unknown
+    }
     const title = typeof data.title === 'string' ? data.title.trim() : ''
     const sections = parseSections(data.sections)
     const steps = parseSteps(data.steps, sections)
@@ -292,7 +355,19 @@ export function parseCourse(raw: string, source: string, audience: string): Cour
     const intentRaw = typeof data.intent === 'string' ? data.intent.trim() : ''
     const intent: LessonIntent =
       intentRaw === 'homework' || intentRaw === 'exam' || intentRaw === 'topic' ? intentRaw : 'topic'
-    return { title, audience: audience.trim(), source, intent, sections, steps }
+    const anchorIds = [...new Set(steps.flatMap((step) => step.reveals.map((r) => r.id)))]
+    const quizQuestions = parseQuizQuestions(data.quizQuestions, anchorIds)
+    const lessonPlan = typeof data.lessonPlan === 'string' ? data.lessonPlan.trim() : ''
+    return {
+      title,
+      audience: audience.trim(),
+      source,
+      intent,
+      sections,
+      steps,
+      lessonPlan: lessonPlan || undefined,
+      quizQuestions: quizQuestions.length ? quizQuestions : undefined,
+    }
   } catch {
     return null
   }
@@ -375,6 +450,61 @@ function parseReveals(value: unknown, seen: Set<string>): Reveal[] {
   return reveals
 }
 
+export function bindQuizAnchors(questions: QuizQ[], anchors: string[]): QuizQ[] {
+  const pool = anchors.filter(Boolean)
+  const fallback = pool[0] ?? 'def'
+  const trap = pool.find((id) => /trap|易錯|err|pit/i.test(id)) ?? pool[Math.min(1, pool.length - 1)] ?? fallback
+  return questions.map((q, index) => {
+    const anchor = q.anchor && pool.includes(q.anchor) ? q.anchor : index % 2 === 0 ? trap : fallback
+    const laser = q.laser && pool.includes(q.laser) ? q.laser : anchor
+    const page = Number.isFinite(q.page) ? q.page : 0
+    return { ...q, anchor, laser, page }
+  })
+}
+
+function parseQuizQuestions(value: unknown, anchorPool: string[]): QuizQ[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((item, index) => {
+    const rows = parseQuiz(JSON.stringify({ questions: [item] }))
+    const row = rows[0]
+    if (!row) return []
+    const bound = bindQuizAnchors([{ ...row, id: `exam-${index}` }], anchorPool)[0]
+    return [bound]
+  })
+}
+
+export function topicQuizPrompt(audience: string, anchors: string[], material: string, count = 3) {
+  const who = audience.trim() ? `教學對象：${audience.trim()}。` : ''
+  const mem = memoryContextForPrompt(600)
+  const anchorHint = anchors.length ? anchors.join('、') : '（請選板上已有 id）'
+  return [
+    '主題課收尾小測：只考這堂白板上的觀念與圖。',
+    who,
+    mem,
+    `題數：${count}。`,
+    '每題必須帶 anchor、laser、page，錯題要能指回剛才的圖或重點。',
+    `可選 anchor：${anchorHint}`,
+    '只回 JSON：{"questions":[{"prompt":"…","kind":"choice","choices":["A","B","C"],"accept":["A"],"explain":"…","anchor":"g1","laser":"g1","page":0}]}',
+    `教材：\n${material}`,
+  ].join('\n')
+}
+
+export function examQuizPrompt(audience: string, anchors: string[], material: string, count = 4) {
+  const who = audience.trim() ? `教學對象：${audience.trim()}。` : ''
+  const mem = memoryContextForPrompt(600)
+  const anchorHint = anchors.length ? anchors.join('、') : '（尚無，請依教材自訂並與考點相關）'
+  return [
+    '備考收尾小測：只考這份教材與白板上出現過的考點、易錯點。',
+    who,
+    mem,
+    `題數：${count}。難度中等。`,
+    '每題必須帶 anchor、laser（從下列白板 id 選，優先易錯圖）和 page。',
+    `可選 anchor：${anchorHint}`,
+    '只回 JSON：{"questions":[{"prompt":"題目","kind":"choice","choices":["A","B","C"],"accept":["A"],"explain":"檢討","anchor":"trap1","laser":"trap1","page":0}]}',
+    `教材：\n${material}`,
+  ].join('\n')
+}
+
 export function quizPrompt(difficulty: Difficulty, count: number, audience: string) {
   const name = difficulty === 'easy' ? '容易' : difficulty === 'hard' ? '難' : '中等'
   const who = audience.trim() ? `教學對象：${audience.trim()}。` : ''
@@ -399,26 +529,41 @@ export function parseQuiz(raw: string): QuizQ[] {
     if (!Array.isArray(data.questions)) return []
     return data.questions.flatMap((item, index) => {
       if (!item || typeof item !== 'object') return []
-      const row = item as { prompt?: unknown; kind?: unknown; choices?: unknown; accept?: unknown; explain?: unknown }
+      const row = item as {
+        prompt?: unknown
+        kind?: unknown
+        choices?: unknown
+        accept?: unknown
+        explain?: unknown
+        anchor?: unknown
+        laser?: unknown
+        page?: unknown
+        id?: unknown
+      }
       const prompt = typeof row.prompt === 'string' ? row.prompt.trim() : ''
       const explain = typeof row.explain === 'string' ? row.explain.trim() : ''
       const accept = Array.isArray(row.accept) ? row.accept.filter((value): value is string => typeof value === 'string' && value.trim() !== '') : []
       if (!prompt || !explain || accept.length === 0) return []
       const choices = Array.isArray(row.choices) ? row.choices.filter((value): value is string => typeof value === 'string') : undefined
       const kind = row.kind === 'fill' || !choices?.length ? 'fill' : 'choice'
+      const anchor = typeof row.anchor === 'string' && row.anchor.trim() ? row.anchor.trim() : 'def'
+      const laser = typeof row.laser === 'string' && row.laser.trim() ? row.laser.trim() : anchor
+      const pageRaw = typeof row.page === 'number' ? row.page : Number(row.page)
+      const page = Number.isFinite(pageRaw) && pageRaw >= 0 ? Math.floor(pageRaw) : 0
+      const id = typeof row.id === 'string' && row.id.trim() ? row.id.trim() : `model-${index}`
       return [
         {
-          id: `model-${index}`,
-          requires: 'def',
+          id,
+          requires: anchor,
           difficulty: 'mid' as const,
           prompt,
           kind,
           choices: kind === 'choice' ? choices : undefined,
           accept,
           explain,
-          laser: 'def',
-          anchor: 'def',
-          page: 0,
+          laser,
+          anchor,
+          page,
           note: explain,
         },
       ]
