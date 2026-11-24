@@ -11,6 +11,8 @@ declare global {
       messageHandlers?: {
         aiStudyTTS?: { postMessage: (body: unknown) => void }
         aiStudyTTSStop?: { postMessage: (body: unknown) => void }
+        aiStudyMicStart?: { postMessage: (body: unknown) => void }
+        aiStudyMicStop?: { postMessage: (body: unknown) => void }
         aiStudyLessonSave?: { postMessage: (body: unknown) => void }
         aiStudyMemorySave?: { postMessage: (body: unknown) => void }
       }
@@ -231,6 +233,12 @@ export function flushSpeakQueue() {
   window.webkit?.messageHandlers?.aiStudyTTSStop?.postMessage({})
 }
 
+function notifyNativeMic(active: boolean) {
+  if (!isEmbeddedNativeWebView()) return
+  const handler = active ? window.webkit?.messageHandlers?.aiStudyMicStart : window.webkit?.messageHandlers?.aiStudyMicStop
+  handler?.postMessage({})
+}
+
 export async function listen(
   onText: (text: string) => void,
   options?: { onFinal?: (text: string) => void },
@@ -238,6 +246,7 @@ export async function listen(
   const prefs = loadPreferences()
   const { Capacitor } = await import('@capacitor/core')
   if (Capacitor.isNativePlatform()) {
+    notifyNativeMic(true)
     const { SpeechRecognition } = await import('@capacitor-community/speech-recognition')
     const permission = await SpeechRecognition.requestPermissions()
     if (permission.speechRecognition !== 'granted') {
@@ -260,6 +269,7 @@ export async function listen(
     return async () => {
       await SpeechRecognition.stop()
       await handle.remove()
+      notifyNativeMic(false)
       if (prefs.voiceAutoSend && last.trim()) options?.onFinal?.(last.trim())
     }
   }

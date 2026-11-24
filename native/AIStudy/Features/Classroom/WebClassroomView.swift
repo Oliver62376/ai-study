@@ -66,6 +66,8 @@ private struct WebClassroomWebView: UIViewRepresentable {
         let lessons = context.coordinator.lessonBridge
         config.userContentController.add(speech, name: "aiStudyTTS")
         config.userContentController.add(speech, name: "aiStudyTTSStop")
+        config.userContentController.add(speech, name: "aiStudyMicStart")
+        config.userContentController.add(speech, name: "aiStudyMicStop")
         config.userContentController.add(lessons, name: "aiStudyLessonSave")
         config.userContentController.add(lessons, name: "aiStudyMemorySave")
 
@@ -110,6 +112,8 @@ private struct WebClassroomWebView: UIViewRepresentable {
     static func dismantleUIView(_ uiView: WKWebView, coordinator: Coordinator) {
         uiView.configuration.userContentController.removeScriptMessageHandler(forName: "aiStudyTTS")
         uiView.configuration.userContentController.removeScriptMessageHandler(forName: "aiStudyTTSStop")
+        uiView.configuration.userContentController.removeScriptMessageHandler(forName: "aiStudyMicStart")
+        uiView.configuration.userContentController.removeScriptMessageHandler(forName: "aiStudyMicStop")
         uiView.configuration.userContentController.removeScriptMessageHandler(forName: "aiStudyLessonSave")
         uiView.configuration.userContentController.removeScriptMessageHandler(forName: "aiStudyMemorySave")
     }

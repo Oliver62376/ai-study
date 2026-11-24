@@ -14,7 +14,7 @@ final class WebSpeechBridge: NSObject, WKScriptMessageHandler, AVSpeechSynthesiz
         synth.delegate = self
     }
 
-    private func prepareAudioSession() {
+    private func preparePlaybackSession() {
         let session = AVAudioSession.sharedInstance()
         do {
             try session.setCategory(
@@ -29,12 +29,27 @@ final class WebSpeechBridge: NSObject, WKScriptMessageHandler, AVSpeechSynthesiz
         }
     }
 
+    private func prepareMicSession() {
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(
+                .playAndRecord,
+                mode: .measurement,
+                options: [.defaultToSpeaker, .allowBluetooth, .mixWithOthers]
+            )
+            try session.setActive(true, options: [])
+            try session.overrideOutputAudioPort(.speaker)
+        } catch {
+            NSLog("WebSpeechBridge mic session: \(error.localizedDescription)")
+        }
+    }
+
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         switch message.name {
         case "aiStudyTTS":
             guard let body = message.body as? [String: Any],
                   let text = body["text"] as? String, !text.isEmpty else { return }
-            prepareAudioSession()
+            preparePlaybackSession()
             let prefs = AppPreferencesStore.preferences
             let utterance = AVSpeechUtterance(string: text)
             let rateFactor = Float(prefs.ttsRate)
@@ -60,6 +75,10 @@ final class WebSpeechBridge: NSObject, WKScriptMessageHandler, AVSpeechSynthesiz
             utteranceQueue.removeAll()
             speakingFromQueue = false
             synth.stopSpeaking(at: .immediate)
+        case "aiStudyMicStart":
+            prepareMicSession()
+        case "aiStudyMicStop":
+            preparePlaybackSession()
         default:
             break
         }

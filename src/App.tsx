@@ -117,7 +117,8 @@ export default function App() {
   const [hudMore, setHudMore] = useState(false)
   const planIntentRef = useRef<LessonIntent>('topic')
   const wrapQuizFetchedRef = useRef('')
-  const autoMicLessonRef = useRef('')
+  const autoMicHintRef = useRef('')
+  const autoMicAwaitRef = useRef('')
 
   function boardPromptExtras(course: Course) {
     return {
@@ -303,24 +304,23 @@ export default function App() {
   useEffect(() => {
     if (screen !== 'class' || !state.course) return
     if (!loadPreferences().autoMicInClass) return
-    if (listening) return
     const lessonKey = activeLessonId || state.course.title
-    if (autoMicLessonRef.current === lessonKey) return
-    const waitingReply = state.phase === 'awaiting_student'
     const opening = state.phase === 'speaking' && state.job?.kind === 'step' && state.stepIndex === 0
-    if (waitingReply) {
-      setHint('麥克風已開：說出你的想法，會轉成文字送出，家教會連上模型回你。')
-      void onListen(true)
-      return
+    if (opening && autoMicHintRef.current !== lessonKey) {
+      autoMicHintRef.current = lessonKey
+      setHint('上課開始。先聽家教講課；輪到你回答時麥克風會自動開啟，也可隨時點麥克風。')
     }
-    if (!opening || autoMicLessonRef.current === lessonKey) return
-    autoMicLessonRef.current = lessonKey
-    setHint('麥克風已開：上課中可隨時用語音回答或提問（說完會自動送出，不存原聲）。')
-    void onListen(true)
+    if (state.phase !== 'awaiting_student' || listening) return
+    const awaitKey = `${lessonKey}-s${state.stepIndex}`
+    if (autoMicAwaitRef.current === awaitKey) return
+    autoMicAwaitRef.current = awaitKey
+    setHint('輪到你了：麥克風已開，說完會自動送出，家教會連模型回你。')
+    void onListen(true, false)
   }, [screen, state.course?.title, state.phase, state.job?.id, state.job?.kind, state.stepIndex, listening, activeLessonId])
 
   useEffect(() => {
-    autoMicLessonRef.current = ''
+    autoMicHintRef.current = ''
+    autoMicAwaitRef.current = ''
   }, [state.course?.title, activeLessonId])
 
   useEffect(() => {
@@ -372,7 +372,7 @@ export default function App() {
   const pageCount = state.reveals.length ? writtenPage + 1 : 1
   const shownPage = Math.min(viewPage, pageCount - 1)
 
-  async function onListen(forceAutoSend = false) {
+  async function onListen(forceAutoSend = false, pauseLesson = true) {
     if (listening) {
       await listenStop.current?.()
       listenStop.current = null
@@ -381,7 +381,10 @@ export default function App() {
       if (draft.trim()) void onSend(draft.trim())
       return
     }
-    if (state.phase === 'speaking' || state.phase === 'supplement' || state.phase === 'quiz-review' || state.phase === 'bridge') {
+    if (
+      pauseLesson &&
+      (state.phase === 'speaking' || state.phase === 'supplement' || state.phase === 'quiz-review' || state.phase === 'bridge')
+    ) {
       dispatch({ type: 'pause' })
     }
     try {
