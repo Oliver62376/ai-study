@@ -18,6 +18,8 @@ export interface AppPreferences {
   pauseAfterSentenceMs: number
   pauseOnPageTurnMs: number
   materialPanel: MaterialPanelMode
+  /** 進入課堂後自動開啟語音輸入（不錄原聲） */
+  autoMicInClass: boolean
 }
 
 const KEY = 'ai-study-prefs-v1'
@@ -37,6 +39,7 @@ export function defaultPreferences(): AppPreferences {
     pauseAfterSentenceMs: 1500,
     pauseOnPageTurnMs: 2000,
     materialPanel: 'material',
+    autoMicInClass: true,
   }
 }
 

@@ -149,6 +149,10 @@ export interface Job {
   laser?: string | null
   /** 備考錯題時螢光標回板書 */
   reviewHighlight?: { page: number; anchor: string; color: string }
+  /** 不打 API，直接用 text 念稿（例如重講） */
+  supplementLocal?: boolean
+  /** 補充講完後進下一段 step（例如學生回答提問後） */
+  advanceStep?: boolean
 }
 
 export type Phase =
@@ -419,29 +423,39 @@ export function grade(q: QuizQ, answer: string) {
   return q.accept.some((item) => value.includes(item.toLowerCase().replace(/\s+/g, '')))
 }
 
-interface AskResult {
+interface LocalAskResult {
+  kind: 'local'
   say: string
   laser: string | null
   note: Reveal | null
 }
 
-function interpret(text: string, state: State): AskResult | 'quiz' {
+function interpret(text: string, state: State): LocalAskResult | 'quiz' | 'model' {
   const t = text.replace(/\s+/g, '')
   if (/測驗|考考|出題|練習/.test(t)) return 'quiz'
-  if (/重講|再說|不懂|不了解|聽不懂/.test(t)) {
+  if (/重講|再說一次|再講一次/.test(t)) {
     const steps = courseSteps(state)
     const step = steps[Math.min(state.stepIndex, Math.max(steps.length - 1, 0))]
     return {
+      kind: 'local',
       say: step ? `我把剛剛那句再講一次。${step.say}` : '還沒有可以重講的內容。',
       laser: state.laser,
       note: null,
     }
   }
-  return {
-    say: '這句要由接上的模型回答。到「模型」填好 API 之後再問一次，我會回到現在的進度。',
-    laser: null,
-    note: null,
+  return 'model'
+}
+
+function startModelSupplement(state: State, studentText: string, at: number, advanceStep: boolean): State {
+  const armed = state.recording ? state : { ...state, recording: true, replayBoard: state.reveals }
+  const withStudent: State = {
+    ...armed,
+    transcript: appendLine(armed.transcript, 'student', studentText),
+    events: record(armed, { t: at, type: 'say', role: 'student', text: studentText }, at),
   }
+  const pending = '我聽到了，讓我想一下怎麼回你。'
+  const job = nextJob(withStudent, 'supplement', studentText, { advanceStep: advanceStep || undefined })
+  return withJob(withStudent, job, 'supplement', { caption: pending, laser: null })
 }
 
 function startQuiz(state: State, at: number): State {
@@ -607,7 +621,13 @@ export function reduce(state: State, action: Action): State {
         if (flushed.finished || flushed.stepIndex >= courseSteps(flushed).length) {
           return { ...flushed, phase: 'done', job: null, caption: '補充結束。課程先前已經講完。' }
         }
-        return beginStep(flushed, action.at)
+        if (flushed.job?.advanceStep) {
+          const nextIndex = flushed.stepIndex + 1
+          const steps = courseSteps(flushed)
+          if (nextIndex >= steps.length) return endLecture({ ...flushed, job: null }, action.at)
+          return beginStep({ ...flushed, stepIndex: nextIndex, job: null }, action.at)
+        }
+        return beginStep({ ...flushed, job: null }, action.at)
       }
       if (state.phase === 'quiz-review') {
         const flushed = state.job?.note ? flushReveals(state, [state.job.note], action.at) : state
@@ -661,33 +681,33 @@ export function reduce(state: State, action: Action): State {
       if (!text) return state
       if (state.phase === 'replay' || state.phase === 'quiz-ask' || state.phase === 'quiz-review') return state
       if (state.phase === 'awaiting_student') {
+        return startModelSupplement(state, text, action.at, true)
+      }
+      const result = interpret(text, state)
+      if (result === 'quiz') {
         const withStudent: State = {
           ...state,
           transcript: appendLine(state.transcript, 'student', text),
           events: record(state, { t: action.at, type: 'say', role: 'student', text }, action.at),
         }
-        const steps = courseSteps(withStudent)
-        const nextIndex = withStudent.stepIndex + 1
-        if (nextIndex >= steps.length) return endLecture(withStudent, action.at)
-        return beginStep({ ...withStudent, stepIndex: nextIndex }, action.at)
+        return startQuiz(withStudent, action.at)
       }
+      if (result === 'model') return startModelSupplement(state, text, action.at, false)
       const armed = state.recording ? state : { ...state, recording: true, replayBoard: state.reveals }
       const withStudent: State = {
         ...armed,
         transcript: appendLine(armed.transcript, 'student', text),
         events: record(armed, { t: action.at, type: 'say', role: 'student', text }, action.at),
       }
-      const result = interpret(text, withStudent)
-      if (result === 'quiz') return startQuiz(withStudent, action.at)
-      const say = action.say?.trim() || result.say
-      const job = nextJob(withStudent, 'supplement', say, {
+      const job = nextJob(withStudent, 'supplement', result.say, {
         note: result.note ?? undefined,
         laser: result.laser,
+        supplementLocal: true,
       })
       return withJob(withStudent, job, 'supplement', {
-        caption: say,
-        transcript: appendLine(withStudent.transcript, 'teacher', say),
-        events: record(withStudent, { t: action.at, type: 'say', role: 'teacher', text: say }, action.at),
+        caption: result.say,
+        transcript: appendLine(withStudent.transcript, 'teacher', result.say),
+        events: record(withStudent, { t: action.at, type: 'say', role: 'teacher', text: result.say }, action.at),
         laser: result.laser,
       })
     }

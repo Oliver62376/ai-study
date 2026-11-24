@@ -117,6 +117,7 @@ export default function App() {
   const [hudMore, setHudMore] = useState(false)
   const planIntentRef = useRef<LessonIntent>('topic')
   const wrapQuizFetchedRef = useRef('')
+  const autoMicLessonRef = useRef('')
 
   function boardPromptExtras(course: Course) {
     return {
@@ -254,13 +255,19 @@ export default function App() {
     const settings = loadSettings()
     const connected = isConnected(settings)
     const courseNow = stateRef.current.course
-    if (!fast && connected && job.kind === 'supplement' && courseNow) {
-      const outline = job.text
+    if (job.kind === 'supplement' && job.supplementLocal) {
+      arm(job.text)
+    } else if (!fast && job.kind === 'supplement' && courseNow && connected) {
+      const studentSaid = job.text
       const anchors = anchorsOf(stateRef.current.reveals)
+      const awaiting = job.advanceStep ? '學生正在回答你剛才的提問。先回饋對錯或思路，再自然接到下一段。' : '學生剛打斷你。'
       void askProvider(
         settings,
-        `學生剛打斷你。只依這份教材回答，然後說要回到課程進度。需要時用螢光筆標出你指的位置。\n學生說：${outline}`,
-        courseNow.sections.map((section) => `${section.title}\n${section.body}`).join('\n\n'),
+        `${awaiting}只依這份課與白板內容回答；需要時在 draws 補圖或 highlights 標位置，最後一句說會繼續上課。\n學生說：${studentSaid}`,
+        [
+          ...courseNow.sections.map((section) => `${section.title}\n${section.body}`),
+          `目前字幕：${stateRef.current.caption}`,
+        ].join('\n\n'),
         boardToolPrompt(
           courseNow.title,
           anchors,
@@ -271,16 +278,18 @@ export default function App() {
       )
         .then((spoken) => {
           if (closed || !spoken) return
-          const turn = parseTeacherTurn(spoken, outline)
-          applyTeacherTurn(turn, courseNow.title, outline)
+          const turn = parseTeacherTurn(spoken, '我先回你剛才那句。')
+          applyTeacherTurn(turn, courseNow.title, studentSaid)
           dispatch({ type: 'retell', text: turn.say })
           arm(turn.say)
         })
         .catch(() => {
           if (closed) return
-          setHint('模型沒有回應，這句先用教材講稿。')
-          arm(outline)
+          setHint('模型沒有回應。檢查網路或設定後再問一次。')
+          arm('我這邊暫時連不上模型。你可以先把想法記在底下，或再試一次。')
         })
+    } else if (job.kind === 'supplement' && !connected) {
+      arm('還沒接上模型。請到設定頁完成連線，我才能針對你的問題思考回答。')
     } else {
       arm(job.text)
     }
@@ -290,6 +299,29 @@ export default function App() {
       cancelSpeak()
     }
   }, [state.job?.id])
+
+  useEffect(() => {
+    if (screen !== 'class' || !state.course) return
+    if (!loadPreferences().autoMicInClass) return
+    if (listening) return
+    const lessonKey = activeLessonId || state.course.title
+    if (autoMicLessonRef.current === lessonKey) return
+    const waitingReply = state.phase === 'awaiting_student'
+    const opening = state.phase === 'speaking' && state.job?.kind === 'step' && state.stepIndex === 0
+    if (waitingReply) {
+      setHint('麥克風已開：說出你的想法，會轉成文字送出，家教會連上模型回你。')
+      void onListen(true)
+      return
+    }
+    if (!opening || autoMicLessonRef.current === lessonKey) return
+    autoMicLessonRef.current = lessonKey
+    setHint('麥克風已開：上課中可隨時用語音回答或提問（說完會自動送出，不存原聲）。')
+    void onListen(true)
+  }, [screen, state.course?.title, state.phase, state.job?.id, state.job?.kind, state.stepIndex, listening, activeLessonId])
+
+  useEffect(() => {
+    autoMicLessonRef.current = ''
+  }, [state.course?.title, activeLessonId])
 
   useEffect(() => {
     const course = state.course
@@ -340,7 +372,7 @@ export default function App() {
   const pageCount = state.reveals.length ? writtenPage + 1 : 1
   const shownPage = Math.min(viewPage, pageCount - 1)
 
-  async function onListen() {
+  async function onListen(forceAutoSend = false) {
     if (listening) {
       await listenStop.current?.()
       listenStop.current = null
@@ -355,7 +387,7 @@ export default function App() {
     try {
       listenStop.current = await listen(setDraft, {
         onFinal: (text) => {
-          if (!loadPreferences().voiceAutoSend) return
+          if (!forceAutoSend && !loadPreferences().voiceAutoSend) return
           setDraft(text)
           void onSend(text)
         },
@@ -384,7 +416,7 @@ export default function App() {
 
   async function onSend(text = draft.trim()) {
     if (!text) return
-    const phaseBefore = stateRef.current.phase
+    if (speakingNow() && stateRef.current.phase !== 'awaiting_student') dispatch({ type: 'pause' })
     if (/測驗|考考|出題|練習/.test(text.replace(/\s+/g, ''))) {
       openQuiz('class')
       setDraft('')
@@ -398,42 +430,6 @@ export default function App() {
         dispatch({ type: 'homework-unlock', at: at() })
       }
       dispatch({ type: 'ask', text, at: at() })
-      const settings = loadSettings()
-      if (phaseBefore === 'awaiting_student') {
-        setDraft('')
-        void listenStop.current?.()
-        listenStop.current = null
-        setListening(false)
-        return
-      }
-      if (isConnected(settings) && course) {
-        void (async () => {
-          try {
-            const context = [
-              ...course.sections.map((section) => `${section.title}\n${section.body}`),
-              stateRef.current.caption,
-            ].join('\n')
-            const raw = await askProvider(
-              settings,
-              text,
-              context,
-              boardToolPrompt(
-                course.title,
-                anchorsOf(stateRef.current.reveals),
-                course.audience || gradeLabel(),
-                course.intent ?? 'topic',
-                boardPromptExtras(course),
-              ),
-            )
-            if (!raw) return
-            const turn = parseTeacherTurn(raw, '')
-            applyTeacherTurn(turn, course.title, text)
-            if (turn.say?.trim()) dispatch({ type: 'retell', text: turn.say.trim() })
-          } catch {
-            setHint('這次沒連上模型。')
-          }
-        })()
-      }
     }
     setDraft('')
     void listenStop.current?.()
